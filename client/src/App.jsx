@@ -52321,6 +52321,7 @@ function GymQuiz({ title, subtitle, typeKeys, welcomeText, algebraInput, onBack 
  */
 function BasicArithApp({ onBack, completedTopics = [], goldMastery = [], markTopicCompleted, setTransferTopic, setMode, isGoalMode = false }) {
   const [showCarJourney, setShowCarJourney] = useState(false)
+  const [showOrigin, setShowOrigin] = useState(false)
   // Difficulty level: 'easy', 'medium', 'hard', 'extrahard'
   const [difficulty, setDifficulty] = useState(() => cjTakeReco('basicarith', CJ_RECO_DIFFS) || 'easy')
   // Adaptive mode enabled?
@@ -52565,6 +52566,10 @@ const fetchQuestion = async () => {
     return <CarJourneyApp onBack={() => setShowCarJourney(false)} setMode={setMode} />
   }
 
+  if (showOrigin) {
+    return <BasicArithmeticLabApp onBack={() => setShowOrigin(false)} />
+  }
+
   return (
     <QuizLayout title="Origin" subtitle="Add, subtract, multiply & divide positive & negative numbers" onBack={onBack} timer={started && !finished ? timer : null}>
       {!started && !finished && <div className="welcome-box">
@@ -52636,6 +52641,12 @@ const fetchQuestion = async () => {
           padding: '10px 24px', color: 'var(--clr-text-soft)', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer'
         }}>
           The Car Journey — 16-stop math road trip
+        </button>
+        <button type="button" onClick={() => setShowOrigin(true)} style={{
+          marginTop: '12px', background: 'transparent', border: '1px solid var(--clr-border)', borderRadius: '6px',
+          padding: '10px 24px', color: 'var(--clr-text-soft)', fontWeight: 600, fontSize: '0.9rem', cursor: 'pointer'
+        }}>
+          Origin — Practice +, −, ×, ÷ with varied templates
         </button>
       </div>}
       {started && !finished && <>
