@@ -345,95 +345,64 @@ export default function Numbers1To10App({
 
       const t2 = setTimeout(() => {
         setDemoHandPos({ target: 'dice', clicking: false });
-        const demoTarget = 3;
+        const demoTarget = 8;
         setGameDiceTarget(demoTarget);
-        setCurrentDiceValues([demoTarget]);
+        setCurrentDiceValues(DICE_SPLITS[8] || [5, 3]);
         setHasRolled(true);
         setGameDiceRolling(false);
         setDemoStep(3);
-        setFeedbackMsg('🎬 Demo: Rolled 3! Now tap Hop ▶ to jump!');
+        setFeedbackMsg('🎬 Demo: Rolled 8 (5 and 3)! Now tap Hop ▶ to jump!');
         // Move hand down to Hop button
         setDemoHandPos({ target: 'hop', clicking: false });
 
-        // Step 2: Hand taps Hop 1 at t = 1.3s
-        const t3 = setTimeout(() => {
-          setDemoHandPos({ target: 'hop', clicking: true });
-          sfxClick();
-          sfxBoing();
-          setTimeout(() => sfxCoin(), 70);
-          setBunnyHopSpring(true);
-          setBunnyPos(1);
-          setDemoStep(4);
-          setFeedbackMsg('🎬 Demo: Bunny hops & collects carrot 1! 🥕');
+        // Sequential 8 hops to demonstrate the full path to 8
+        const hopDelayBase = 680;
+        for (let hopNum = 1; hopNum <= 8; hopNum++) {
+          const hopTimer = setTimeout(() => {
+            setDemoHandPos({ target: 'hop', clicking: true });
+            sfxClick();
+            sfxBoing();
+            setTimeout(() => sfxCoin(), 60);
+            setBunnyHopSpring(true);
+            setBunnyPos(hopNum);
+            setDemoStep(3 + hopNum);
+            setFeedbackMsg(`🎬 Demo: Bunny hops to ${hopNum}! 🥕`);
 
-          const t4 = setTimeout(() => {
-            setBunnyHopSpring(false);
-            setDemoHandPos({ target: 'hop', clicking: false });
+            const liftTimer = setTimeout(() => {
+              setBunnyHopSpring(false);
+              setDemoHandPos({ target: 'hop', clicking: false });
 
-            // Step 3: Hand taps Hop 2 at t = 1.1s
-            const t5 = setTimeout(() => {
-              setDemoHandPos({ target: 'hop', clicking: true });
-              sfxClick();
-              sfxBoing();
-              setTimeout(() => sfxCoin(), 70);
-              setBunnyHopSpring(true);
-              setBunnyPos(2);
-              setDemoStep(5);
-              setFeedbackMsg('🎬 Demo: Bunny hops & collects carrot 2! 🥕');
+              if (hopNum === 8) {
+                setDemoHandPos({ target: 'none', clicking: false });
+                setTargetReached(true);
+                sfxSuccess();
+                setRevealedPad(8);
+                speakNumberName(8);
+                setBunnyYayVisible(true);
+                setFeedbackMsg('🎉 Demo: Reached 8! Card flips and reveals! ⭐');
 
-              const t6 = setTimeout(() => {
-                setBunnyHopSpring(false);
-                setDemoHandPos({ target: 'hop', clicking: false });
+                if (confettiInstanceRef.current) {
+                  try {
+                    confettiInstanceRef.current({
+                      particleCount: 50,
+                      spread: 60,
+                      origin: { y: 0.7 }
+                    });
+                  } catch {
+                    // safe fallback
+                  }
+                }
 
-                // Step 4: Hand taps Hop 3 (Goal!) at t = 1.1s
-                const t7 = setTimeout(() => {
-                  setDemoHandPos({ target: 'hop', clicking: true });
-                  sfxClick();
-                  sfxBoing();
-                  setTimeout(() => sfxCoin(), 70);
-                  setBunnyHopSpring(true);
-                  setBunnyPos(3);
-                  setDemoStep(6);
-
-                  const t8 = setTimeout(() => {
-                    setBunnyHopSpring(false);
-                    setDemoHandPos({ target: 'none', clicking: false });
-                    setTargetReached(true);
-                    sfxSuccess();
-                    setRevealedPad(3);
-                    speakNumberName(3);
-                    setBunnyYayVisible(true);
-                    setFeedbackMsg('🎉 Demo: Reached 3! Card flips and reveals! ⭐');
-
-                    if (confettiInstanceRef.current) {
-                      try {
-                        confettiInstanceRef.current({
-                          particleCount: 50,
-                          spread: 60,
-                          origin: { y: 0.7 }
-                        });
-                      } catch {
-                        // safe fallback
-                      }
-                    }
-
-                    // Step 5: Finish screen at t = 1.2s
-                    const t9 = setTimeout(() => {
-                      setDemoStep(7);
-                    }, 1200);
-                    demoTimersRef.current.push(t9);
-                  }, 320);
-                  demoTimersRef.current.push(t8);
-                }, 1100);
-                demoTimersRef.current.push(t7);
-              }, 320);
-              demoTimersRef.current.push(t6);
-            }, 1100);
-            demoTimersRef.current.push(t5);
-          }, 320);
-          demoTimersRef.current.push(t4);
-        }, 1300);
-        demoTimersRef.current.push(t3);
+                const finishTimer = setTimeout(() => {
+                  setDemoStep(12);
+                }, 1200);
+                demoTimersRef.current.push(finishTimer);
+              }
+            }, 260);
+            demoTimersRef.current.push(liftTimer);
+          }, 850 + (hopNum - 1) * hopDelayBase);
+          demoTimersRef.current.push(hopTimer);
+        }
       }, 350);
       demoTimersRef.current.push(t2);
     }, 1300);
@@ -779,10 +748,9 @@ export default function Numbers1To10App({
                       {demoStep === 1 && '1. Click the Dice 🎲'}
                       {demoStep === 2 && '🎲 Rolling the dice...'}
                       {demoStep === 3 && '2. Click Hop ▶ 🐰'}
-                      {demoStep === 4 && '🐰 Hop to 1: Carrot collected! 🥕'}
-                      {demoStep === 5 && '🐰 Hop to 2: Carrot collected! 🥕'}
-                      {demoStep === 6 && '🎉 Reached Goal 3! Card flips! ⭐'}
-                      {demoStep === 7 && "⭐ Tutorial Finished! ⭐"}
+                      {demoStep >= 4 && demoStep <= 10 && `🐰 Hop to ${demoStep - 3}: Carrot collected! 🥕`}
+                      {demoStep === 11 && '🎉 Reached Goal 8! Card flips! ⭐'}
+                      {demoStep >= 12 && "⭐ Tutorial Finished! ⭐"}
                     </span>
                     <button
                       type="button"
@@ -826,7 +794,7 @@ export default function Numbers1To10App({
             </div>
 
             {/* Subway Surfers / Temple Run Finish Screen */}
-            {demoActive && demoStep === 7 && (
+            {demoActive && demoStep >= 12 && (
               <div className="demo-finish-overlay">
                 <div className="demo-finish-card">
                   <span style={{ fontSize: '2.4rem', lineHeight: 1 }}>🎉</span>
