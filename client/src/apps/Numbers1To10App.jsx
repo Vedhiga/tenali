@@ -55,6 +55,9 @@ export default function Numbers1To10App({
   const [revealedPad, setRevealedPad] = useState(null);
   const [discoveredNumbers, setDiscoveredNumbers] = useState(new Set());
 
+  // Interactive demo guide state (guides first-time play: 1. Click Roll -> 2. Click Hop)
+  const [demoCompleted, setDemoCompleted] = useState(false);
+
   // Round message & lock
   const [feedbackMsg, setFeedbackMsg] = useState('🎲 Roll the die to play!');
   const [targetReached, setTargetReached] = useState(false);
@@ -317,18 +320,19 @@ export default function Numbers1To10App({
   // Hop to a specific position with animation
   const hopToPosition = useCallback((targetPos) => {
     sfxBoing();
-    // Video-game coin pickup sound when hopping forward onto a carrot coin
+    // Video-game coin pickup sound when hopping forward onto a carrot
     if (targetPos > bunnyPos && targetPos <= gameDiceTarget) {
       setTimeout(() => sfxCoin(), 70);
     }
     setBunnyHopSpring(true);
     setBunnyPos(targetPos);
+    if (!demoCompleted) setDemoCompleted(true);
 
     setTimeout(() => {
       setBunnyHopSpring(false);
       handleBunnyLanded(targetPos, gameDiceTarget);
     }, 320);
-  }, [bunnyPos, gameDiceTarget, handleBunnyLanded, sfxBoing, sfxCoin]);
+  }, [bunnyPos, demoCompleted, gameDiceTarget, handleBunnyLanded, sfxBoing, sfxCoin]);
 
   // Arrow control: Hop Right (forward)
   const hopRight = useCallback(() => {
@@ -479,7 +483,7 @@ export default function Numbers1To10App({
             style={{ fontSize: '0.8rem', padding: '5px 14px' }}
             onClick={() => setTutorialModalOpen(true)}
           >
-            <span>❓ Help</span>
+            <span>🎬 Demo</span>
           </button>
         </div>
 
@@ -508,14 +512,22 @@ export default function Numbers1To10App({
                 ))}
               </div>
 
-              <button
-                type="button"
-                className="numbers-btn-primary compact"
-                onClick={rollGameDice}
-                disabled={gameDiceRolling}
-              >
-                <span>🎲</span> <span>{hasRolled ? 'Roll Again' : 'Roll!'}</span>
-              </button>
+              <div style={{ position: 'relative', display: 'inline-flex' }}>
+                <button
+                  type="button"
+                  className={`numbers-btn-primary compact ${!hasRolled ? 'demo-pulse-btn' : ''}`}
+                  onClick={rollGameDice}
+                  disabled={gameDiceRolling}
+                >
+                  <span>🎲</span> <span>{hasRolled ? 'Roll Again' : 'Roll!'}</span>
+                </button>
+                {!hasRolled && !demoCompleted && (
+                  <div className="demo-guide-callout roll-callout">
+                    <span className="demo-hand-bounce">👆</span>
+                    <span>1. Click Roll!</span>
+                  </div>
+                )}
+              </div>
 
               <p className="arena-feedback-msg" title={feedbackMsg}>
                 {feedbackMsg}
@@ -556,12 +568,17 @@ export default function Numbers1To10App({
                 <span className="start-burrow-icon" style={{ opacity: bunnyPos === 0 ? 0.35 : 1, fontSize: '1.45rem' }}>🥕</span>
               </div>
 
-              {/* Columns 2-10: Visual Carrot Trail (Zero text overload!) */}
-              <div className="track-guide-banner carrot-trail">
+              {/* Columns 2-10: Clean Guide Banner without separate carrots */}
+              <div className="track-guide-banner">
                 {!hasRolled ? (
-                  <div className="track-guide-visual">
-                    <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--clr-text-soft)' }}>
-                      🎲 Roll to start!
+                  <div className="demo-track-guide">
+                    <span className="demo-step-chip">🎬 Quick Demo</span>
+                    <span className="demo-guide-step">
+                      <span className="demo-num">1</span> Click <strong>Roll 🎲</strong>
+                    </span>
+                    <span className="demo-arrow">➔</span>
+                    <span className="demo-guide-step">
+                      <span className="demo-num">2</span> Click <strong>Hop ▶</strong>
                     </span>
                   </div>
                 ) : targetReached ? (
@@ -572,28 +589,9 @@ export default function Numbers1To10App({
                   </div>
                 ) : (
                   <div className="track-guide-visual">
-                    <div className="carrot-dots-list">
-                      {Array.from({ length: gameDiceTarget }).map((_, idx) => {
-                        const hopStep = idx + 1;
-                        const isHopped = bunnyPos >= hopStep;
-                        return (
-                          <span
-                            key={idx}
-                            className="carrot-dot"
-                            style={{
-                              fontSize: isHopped ? '1.15rem' : '1.35rem',
-                              opacity: isHopped ? 0.35 : 1,
-                              transform: isHopped ? 'scale(0.85)' : 'scale(1.1)',
-                              transition: 'all 0.2s ease',
-                              display: 'inline-block'
-                            }}
-                          >
-                            {isHopped ? '🐾' : '🥕'}
-                          </span>
-                        );
-                      })}
-                    </div>
-                    <span className="carrot-goal-badge">➔ ⭐ {gameDiceTarget}</span>
+                    <span style={{ fontSize: '0.96rem', fontWeight: 700, color: 'var(--clr-text)' }}>
+                      🐰 Hop with Bunny to Card <strong>{gameDiceTarget}</strong>!
+                    </span>
                   </div>
                 )}
                 <div className="track-target-pill">
@@ -622,27 +620,26 @@ export default function Numbers1To10App({
                     className="hop-card-container"
                     title={isRevealed ? `${padNum} (${NUMBER_WORDS[padNum]})` : undefined}
                   >
-                    {/* Floating Video-Game Carrot Coin over Glowing Cards */}
+                    {/* Floating Video-Game Carrot (Only Carrot, No Coin Circle!) */}
                     {isGlowing && (
                       <div
-                        className="card-coin-wrapper"
+                        className="card-carrot-wrapper"
                         style={{
-                          animationDelay: `${(padNum - 1) * 0.12}s`
+                          animationDelay: `${(padNum - 1) * 0.14}s`
                         }}
                       >
                         <div
-                          className="game-coin-carrot"
+                          className="floating-game-carrot"
                           style={{
-                            animationDelay: `${(padNum - 1) * 0.12}s`
+                            animationDelay: `${(padNum - 1) * 0.14}s`
                           }}
                         >
-                          <span className="coin-shine" />
-                          <span className="coin-carrot-emoji">🥕</span>
+                          <span className="floating-carrot-icon">🥕</span>
                         </div>
                         <div
-                          className="coin-ground-shadow"
+                          className="carrot-ground-shadow"
                           style={{
-                            animationDelay: `${(padNum - 1) * 0.12}s`
+                            animationDelay: `${(padNum - 1) * 0.14}s`
                           }}
                         />
                       </div>
@@ -678,15 +675,23 @@ export default function Numbers1To10App({
                 <span>◀</span> <span>Hop</span>
               </button>
 
-              <button
-                type="button"
-                className="hop-arrow-btn primary"
-                onClick={hopRight}
-                disabled={!hasRolled || bunnyPos >= 10 || gameDiceRolling}
-                title="Hop forward"
-              >
-                <span>Hop</span> <span>▶</span>
-              </button>
+              <div style={{ position: 'relative', display: 'inline-flex' }}>
+                <button
+                  type="button"
+                  className={`hop-arrow-btn primary ${hasRolled && bunnyPos === 0 && !demoCompleted ? 'demo-pulse-btn' : ''}`}
+                  onClick={hopRight}
+                  disabled={!hasRolled || bunnyPos >= 10 || gameDiceRolling}
+                  title="Hop forward"
+                >
+                  <span>Hop</span> <span>▶</span>
+                </button>
+                {hasRolled && bunnyPos === 0 && !demoCompleted && (
+                  <div className="demo-guide-callout hop-callout">
+                    <span className="demo-hand-bounce">👆</span>
+                    <span>2. Click Hop!</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="hop-step-indicator">
@@ -739,34 +744,34 @@ export default function Numbers1To10App({
               ✕
             </button>
             <h2 style={{ fontFamily: 'var(--font-display, Georgia, serif)', fontSize: '1.4rem', fontWeight: 700, color: 'var(--clr-text)', margin: '0 0 6px 0' }}>
-              How to Play 🐰
+              Quick Demo 🐰
             </h2>
             <p style={{ fontSize: '0.92rem', color: 'var(--clr-text-soft)', marginBottom: '16px' }}>
-              Roll the die and hop with Bunny to find the number!
+              How to play in 2 easy steps:
             </p>
 
             <div style={{
               display: 'flex',
               flexDirection: 'column',
-              gap: '10px',
+              gap: '12px',
               textAlign: 'left',
               marginBottom: '20px',
               background: 'var(--clr-surface)',
-              padding: '14px',
+              padding: '16px',
               borderRadius: 'var(--radius)',
               border: '1px solid var(--clr-border)'
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.92rem' }}>
-                <span style={{ fontSize: '1.4rem' }}>🎲</span>
-                <span><strong>1. Roll</strong> the die to see where to hop!</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
+                <span style={{ fontSize: '1.6rem' }}>🎲</span>
+                <span><strong>1. Click Roll Dice:</strong> See your target number and reveal the glowing path!</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.92rem' }}>
-                <span style={{ fontSize: '1.4rem' }}>🐰</span>
-                <span><strong>2. Tap Hop ▶</strong> to step across cards!</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
+                <span style={{ fontSize: '1.6rem' }}>🐰</span>
+                <span><strong>2. Click Hop ▶:</strong> Hop Bunny across the cards to collect the floating carrots 🥕!</span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.92rem' }}>
-                <span style={{ fontSize: '1.4rem' }}>⭐</span>
-                <span><strong>3. Land</strong> on the glowing card to reveal it!</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
+                <span style={{ fontSize: '1.6rem' }}>⭐</span>
+                <span><strong>3. Land on Target:</strong> Reach the final card to flip it and celebrate!</span>
               </div>
             </div>
 
