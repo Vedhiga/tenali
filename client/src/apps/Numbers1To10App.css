@@ -301,7 +301,7 @@
 .dice-display-area {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
   flex-shrink: 0;
   user-select: none;

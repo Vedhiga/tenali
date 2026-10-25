@@ -487,16 +487,14 @@ export default function Numbers1To10App({
                 title="Tap dice to roll"
               >
                 {currentDiceValues.map((val, idx) => (
-                  <React.Fragment key={idx}>
-                    {idx > 0 && <span className="dice-plus-badge">+</span>}
-                    <div
-                      className={`dice-cube compact ${currentDiceValues.length > 1 ? 'duo' : ''} ${gameDiceRolling ? 'rolling' : ''}`}
-                    >
-                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <DiceFace count={val} isDuo={currentDiceValues.length > 1} />
-                      </div>
+                  <div
+                    key={idx}
+                    className={`dice-cube compact ${currentDiceValues.length > 1 ? 'duo' : ''} ${gameDiceRolling ? 'rolling' : ''}`}
+                  >
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <DiceFace count={val} isDuo={currentDiceValues.length > 1} />
                     </div>
-                  </React.Fragment>
+                  </div>
                 ))}
               </div>
 
@@ -515,13 +513,7 @@ export default function Numbers1To10App({
             </div>
 
             <div className="numbers-status-pill compact arena-goal-pill">
-              <span>
-                {hasRolled
-                  ? (gameDiceTarget > 6 && currentDiceValues.length === 2
-                      ? `🎯 ${currentDiceValues[0]} + ${currentDiceValues[1]} = ${gameDiceTarget}`
-                      : `🎯 Goal: ${gameDiceTarget}`)
-                  : '🎲 Roll!'}
-              </span>
+              <span>{hasRolled ? `🎯 Goal: ${gameDiceTarget}` : '🎲 Roll!'}</span>
             </div>
           </div>
 
