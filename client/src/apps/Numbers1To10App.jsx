@@ -44,6 +44,12 @@ export default function Numbers1To10App({
   const [gameDiceTarget, setGameDiceTarget] = useState(0);
   const [gameDiceRolling, setGameDiceRolling] = useState(false);
   const [hasRolled, setHasRolled] = useState(false);
+  // Dice values: [val] for 1..6, [val1, val2] for 7..10 with non-repeating numbers
+  const [currentDiceValues, setCurrentDiceValues] = useState([0]);
+
+  // Non-repeating random number pool (ensures numbers 1..10 cycle without immediate repeats)
+  const remainingNumbersRef = useRef([]);
+  const lastRolledNumberRef = useRef(null);
 
   // Currently revealed pad for this round (revealed ONLY when reaching the right card!)
   const [revealedPad, setRevealedPad] = useState(null);
@@ -203,8 +209,52 @@ export default function Numbers1To10App({
     }
   }, [updateCoins, markTopicCompleted]);
 
+  // Helper to pick next number (1 to 10) guaranteeing no consecutive repeats
+  const getNextRandomNumber = useCallback(() => {
+    if (remainingNumbersRef.current.length === 0) {
+      const pool = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
+      // Fisher-Yates shuffle
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+      }
+      // If the next number to pop matches the last rolled number, swap it with another index
+      if (lastRolledNumberRef.current !== null && pool[pool.length - 1] === lastRolledNumberRef.current) {
+        const swapIdx = Math.floor(Math.random() * (pool.length - 1));
+        [pool[pool.length - 1], pool[swapIdx]] = [pool[swapIdx], pool[pool.length - 1]];
+      }
+      remainingNumbersRef.current = pool;
+    }
+
+    let next = remainingNumbersRef.current.pop();
+
+    // Absolute safeguard: if somehow identical to previous roll, swap or pick alternative
+    if (next === lastRolledNumberRef.current) {
+      if (remainingNumbersRef.current.length > 0) {
+        const alt = remainingNumbersRef.current.pop();
+        remainingNumbersRef.current.push(next);
+        next = alt;
+      } else {
+        const candidates = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].filter(n => n !== lastRolledNumberRef.current);
+        next = candidates[Math.floor(Math.random() * candidates.length)];
+      }
+    }
+
+    lastRolledNumberRef.current = next;
+    return next;
+  }, []);
+
+  // Split target numbers into dice values (1..6: 1 die; 7..10: 2 dice with non-repeating numbers)
+  const DICE_SPLITS = {
+    7: [4, 3],
+    8: [5, 3],
+    9: [5, 4],
+    10: [6, 4]
+  };
+
   // Roll die with random count from 1 to 10
   const rollGameDice = useCallback(() => {
+    if (gameDiceRolling) return;
     if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
     sfxDiceRoll();
     setGameDiceRolling(true);
@@ -214,13 +264,18 @@ export default function Numbers1To10App({
     setBunnyYayVisible(false);
 
     setTimeout(() => {
-      let next = Math.floor(Math.random() * 10) + 1;
+      const next = getNextRandomNumber();
       setGameDiceTarget(next);
+      if (next <= 6) {
+        setCurrentDiceValues([next]);
+      } else {
+        setCurrentDiceValues(DICE_SPLITS[next] || [Math.ceil(next / 2), Math.floor(next / 2)]);
+      }
       setHasRolled(true);
       setGameDiceRolling(false);
       setFeedbackMsg(`🐰 Hop ${next} times!`);
     }, 280);
-  }, [sfxDiceRoll]);
+  }, [gameDiceRolling, getNextRandomNumber, sfxDiceRoll]);
 
   // Check if bunny has landed on target
   const handleBunnyLanded = useCallback((newPos, target) => {
@@ -309,111 +364,59 @@ export default function Numbers1To10App({
     };
   }, []);
 
-  // Dice Pip Face Component (1 to 10 dots only - NO numerals printed on die!)
-  const DiceFace = ({ count }) => {
+  // Dice Pip Face Component (Standard 1 to 6 dots on 3x3 grid)
+  const DiceFace = ({ count, isDuo = false }) => {
     const pipBg = '#111827';
 
     if (!hasRolled || count <= 0) {
       return (
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          gap: '2px',
-          userSelect: 'none'
-        }}>
-          <span style={{ fontSize: '2.2rem' }}>🎲</span>
-          <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#111827', textTransform: 'uppercase' }}>
-            Roll Me!
+        <div className="dice-unrolled-face">
+          <span style={{ fontSize: isDuo ? '1.5rem' : '2.1rem' }}>🎲</span>
+          <span style={{ fontSize: '0.66rem', fontWeight: 800, color: '#111827', textTransform: 'uppercase' }}>
+            Roll!
           </span>
         </div>
       );
     }
 
-    if (count <= 6) {
-      const pipMap = {
-        1: [4],
-        2: [0, 8],
-        3: [0, 4, 8],
-        4: [0, 2, 6, 8],
-        5: [0, 2, 4, 6, 8],
-        6: [0, 2, 3, 5, 6, 8]
-      };
-      const pips = pipMap[count] || [];
+    const pipMap = {
+      1: [4],
+      2: [0, 8],
+      3: [0, 4, 8],
+      4: [0, 2, 6, 8],
+      5: [0, 2, 4, 6, 8],
+      6: [0, 2, 3, 5, 6, 8]
+    };
+    const pips = pipMap[count] || [];
+    const dotSize = isDuo ? '11px' : '13px';
 
-      return (
-        <div style={{
+    return (
+      <div
+        style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',
           gridTemplateRows: 'repeat(3, 1fr)',
           width: '100%',
           height: '100%',
-          padding: '4px',
-          gap: '4px',
+          padding: isDuo ? '3px' : '4px',
+          gap: isDuo ? '2px' : '3px',
           placeItems: 'center'
-        }}>
-          {Array.from({ length: 9 }).map((_, idx) => (
-            <div
-              key={idx}
-              style={{
-                width: '15px',
-                height: '15px',
-                borderRadius: '50%',
-                background: pips.includes(idx) ? pipBg : 'transparent',
-                boxShadow: pips.includes(idx) ? 'inset 0 2px 3px rgba(0,0,0,0.45)' : 'none'
-              }}
-            />
-          ))}
-        </div>
-      );
-    } else {
-      const col1 = Math.ceil(count / 2);
-      const col2 = Math.floor(count / 2);
-      const dotSize = count > 8 ? '11px' : '13px';
-
-      return (
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '14px',
-          width: '100%',
-          height: '100%',
-          padding: '2px 0'
-        }}>
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', height: '100%' }}>
-            {Array.from({ length: col1 }).map((_, i) => (
-              <div
-                key={`c1-${i}`}
-                style={{
-                  width: dotSize,
-                  height: dotSize,
-                  background: pipBg,
-                  borderRadius: '50%',
-                  boxShadow: 'inset 0 2px 3px rgba(0,0,0,0.45)'
-                }}
-              />
-            ))}
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-around', height: '100%' }}>
-            {Array.from({ length: col2 }).map((_, j) => (
-              <div
-                key={`c2-${j}`}
-                style={{
-                  width: dotSize,
-                  height: dotSize,
-                  background: pipBg,
-                  borderRadius: '50%',
-                  boxShadow: 'inset 0 2px 3px rgba(0,0,0,0.45)'
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      );
-    }
+        }}
+      >
+        {Array.from({ length: 9 }).map((_, idx) => (
+          <div
+            key={idx}
+            style={{
+              width: dotSize,
+              height: dotSize,
+              borderRadius: '50%',
+              background: pips.includes(idx) ? pipBg : 'transparent',
+              boxShadow: pips.includes(idx) ? 'inset 0 1.5px 2px rgba(0,0,0,0.45)' : 'none'
+            }}
+          />
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -479,13 +482,22 @@ export default function Numbers1To10App({
           <div className="arena-dice-bar">
             <div className="arena-dice-left-group">
               <div
-                className={`dice-cube compact ${gameDiceRolling ? 'rolling' : ''}`}
+                className="dice-display-area"
                 onClick={rollGameDice}
-                title="Tap die to roll"
+                title="Tap dice to roll"
               >
-                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <DiceFace count={gameDiceTarget} />
-                </div>
+                {currentDiceValues.map((val, idx) => (
+                  <React.Fragment key={idx}>
+                    {idx > 0 && <span className="dice-plus-badge">+</span>}
+                    <div
+                      className={`dice-cube compact ${currentDiceValues.length > 1 ? 'duo' : ''} ${gameDiceRolling ? 'rolling' : ''}`}
+                    >
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <DiceFace count={val} isDuo={currentDiceValues.length > 1} />
+                      </div>
+                    </div>
+                  </React.Fragment>
+                ))}
               </div>
 
               <button
@@ -503,7 +515,13 @@ export default function Numbers1To10App({
             </div>
 
             <div className="numbers-status-pill compact arena-goal-pill">
-              <span>{hasRolled ? `🎯 Goal: ${gameDiceTarget}` : '🎲 Roll!'}</span>
+              <span>
+                {hasRolled
+                  ? (gameDiceTarget > 6 && currentDiceValues.length === 2
+                      ? `🎯 ${currentDiceValues[0]} + ${currentDiceValues[1]} = ${gameDiceTarget}`
+                      : `🎯 Goal: ${gameDiceTarget}`)
+                  : '🎲 Roll!'}
+              </span>
             </div>
           </div>
 
