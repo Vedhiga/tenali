@@ -26,6 +26,35 @@ const NUMBER_WORDS = {
  * - Cards are hidden initially; when Bunny reaches the target card,
  *   it flips, reveals the numeral, speaks the number name, and celebrates!
  */
+// 3D Cartoon Click Hand Cursor for tutorials and visual hints (zero text, pure tactile clicking animation)
+function ClickHandCursor({ isPressed = false, isContinuous = false }) {
+  return (
+    <div
+      className={`tutorial-click-hand ${isPressed ? 'is-pressed' : ''} ${isContinuous ? 'is-continuous' : ''}`}
+      aria-hidden="true"
+    >
+      <div className="hand-tap-ripple" />
+      <svg
+        className="hand-pointer-svg"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="#78350f"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path
+          d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+          fill="#fbbf24"
+        />
+        <path d="M14 10V9a2 2 0 0 0-2-2a2 2 0 0 0-2 2v1" fill="#fde047" />
+        <path d="M18 11v-1a2 2 0 0 0-2-2a2 2 0 0 0-2 2" fill="#fde047" />
+        <path d="M10 9.5V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v10" fill="#fef08a" />
+      </svg>
+    </div>
+  );
+}
+
 export default function Numbers1To10App({
   onBack,
   completedTopics = [],
@@ -304,25 +333,25 @@ export default function Numbers1To10App({
     setTutorialModalOpen(false);
     setDemoActive(true);
     setDemoStep(1);
-    setDemoHandPos({ target: 'roll', clicking: false });
-    setFeedbackMsg('🎬 Demo: Tap Roll to start!');
+    setDemoHandPos({ target: 'dice', clicking: false });
+    setFeedbackMsg('🎬 Demo: Tap dice to start!');
 
-    // Step 1: Hand taps Roll Dice at t = 1.3s
+    // Step 1: Hand taps Dice at t = 1.3s
     const t1 = setTimeout(() => {
-      setDemoHandPos({ target: 'roll', clicking: true });
+      setDemoHandPos({ target: 'dice', clicking: true });
       sfxClick();
       sfxDiceRoll();
       setGameDiceRolling(true);
 
       const t2 = setTimeout(() => {
-        setDemoHandPos({ target: 'roll', clicking: false });
+        setDemoHandPos({ target: 'dice', clicking: false });
         const demoTarget = 3;
         setGameDiceTarget(demoTarget);
         setCurrentDiceValues([demoTarget]);
         setHasRolled(true);
         setGameDiceRolling(false);
         setDemoStep(3);
-        setFeedbackMsg('🎬 Demo: Rolled 3! Now tap Hop ▶ to collect carrots!');
+        setFeedbackMsg('🎬 Demo: Rolled 3! Now tap Hop ▶ to jump!');
         // Move hand down to Hop button
         setDemoHandPos({ target: 'hop', clicking: false });
 
@@ -671,38 +700,32 @@ export default function Numbers1To10App({
                 {currentDiceValues.map((val, idx) => (
                   <div
                     key={idx}
-                    className={`dice-cube compact ${currentDiceValues.length > 1 ? 'duo' : ''} ${gameDiceRolling ? 'rolling' : ''}`}
+                    className={`dice-cube compact ${currentDiceValues.length > 1 ? 'duo' : ''} ${gameDiceRolling ? 'rolling' : ''} ${(demoActive && demoHandPos.target === 'dice' && demoHandPos.clicking) ? 'is-demo-pressed' : ''}`}
                   >
                     <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <DiceFace count={val} isDuo={currentDiceValues.length > 1} />
                     </div>
                   </div>
                 ))}
+
+                {/* Hand Clicking Directly ON the Dice Cube */}
+                {demoActive && demoHandPos.target === 'dice' && (
+                  <ClickHandCursor isPressed={demoHandPos.clicking} isContinuous={false} />
+                )}
+                {!demoActive && !hasRolled && !demoCompleted && (
+                  <ClickHandCursor isPressed={false} isContinuous={true} />
+                )}
               </div>
 
               <div style={{ position: 'relative', display: 'inline-flex' }}>
                 <button
                   type="button"
-                  className={`numbers-btn-primary compact ${!hasRolled || (demoActive && demoHandPos.target === 'roll') ? 'demo-pulse-btn' : ''}`}
+                  className={`numbers-btn-primary compact ${!hasRolled || (demoActive && demoHandPos.target === 'dice') ? 'demo-pulse-btn' : ''}`}
                   onClick={rollGameDice}
                   disabled={gameDiceRolling || demoActive}
                 >
                   <span>🎲</span> <span>{hasRolled ? 'Roll Again' : 'Roll!'}</span>
                 </button>
-                {/* Subway Surfers Tutorial Demo Hand Cursor */}
-                {demoActive && demoHandPos.target === 'roll' && (
-                  <div className={`demo-hand-cursor ${demoHandPos.clicking ? 'clicking' : ''}`}>
-                    <span className="hand-pointer-emoji">👆</span>
-                    <span className="hand-action-bubble">1. Tap Roll!</span>
-                    {demoHandPos.clicking && <div className="hand-tap-ring" />}
-                  </div>
-                )}
-                {!demoActive && !hasRolled && !demoCompleted && (
-                  <div className="demo-guide-callout roll-callout">
-                    <span className="demo-hand-bounce">👆</span>
-                    <span>1. Click Roll!</span>
-                  </div>
-                )}
               </div>
 
               <p className="arena-feedback-msg" title={feedbackMsg}>
@@ -753,9 +776,9 @@ export default function Numbers1To10App({
                       <span>TUTORIAL DEMO</span>
                     </div>
                     <span className="demo-live-text">
-                      {demoStep === 1 && '1. Watch: Tap Roll Dice 🎲'}
+                      {demoStep === 1 && '1. Click the Dice 🎲'}
                       {demoStep === 2 && '🎲 Rolling the dice...'}
-                      {demoStep === 3 && '2. Watch: Tap Hop ▶ to jump!'}
+                      {demoStep === 3 && '2. Click Hop ▶ 🐰'}
                       {demoStep === 4 && '🐰 Hop to 1: Carrot collected! 🥕'}
                       {demoStep === 5 && '🐰 Hop to 2: Carrot collected! 🥕'}
                       {demoStep === 6 && '🎉 Reached Goal 3! Card flips! ⭐'}
@@ -903,26 +926,19 @@ export default function Numbers1To10App({
               <div style={{ position: 'relative', display: 'inline-flex' }}>
                 <button
                   type="button"
-                  className={`hop-arrow-btn primary ${(hasRolled && bunnyPos === 0 && !demoCompleted) || (demoActive && demoHandPos.target === 'hop') ? 'demo-pulse-btn' : ''}`}
+                  className={`hop-arrow-btn primary ${(hasRolled && bunnyPos === 0 && !demoCompleted) || (demoActive && demoHandPos.target === 'hop') ? 'demo-pulse-btn' : ''} ${(demoActive && demoHandPos.target === 'hop' && demoHandPos.clicking) ? 'is-demo-pressed' : ''}`}
                   onClick={hopRight}
                   disabled={!hasRolled || bunnyPos >= 10 || gameDiceRolling || demoActive}
                   title="Hop forward"
                 >
                   <span>Hop</span> <span>▶</span>
                 </button>
-                {/* Subway Surfers Tutorial Demo Hand Cursor */}
+                {/* Hand Clicking Directly ON the Hop ▶ Button */}
                 {demoActive && demoHandPos.target === 'hop' && (
-                  <div className={`demo-hand-cursor ${demoHandPos.clicking ? 'clicking' : ''}`}>
-                    <span className="hand-pointer-emoji">👆</span>
-                    <span className="hand-action-bubble">2. Tap Hop!</span>
-                    {demoHandPos.clicking && <div className="hand-tap-ring" />}
-                  </div>
+                  <ClickHandCursor isPressed={demoHandPos.clicking} isContinuous={false} />
                 )}
                 {!demoActive && hasRolled && bunnyPos === 0 && !demoCompleted && (
-                  <div className="demo-guide-callout hop-callout">
-                    <span className="demo-hand-bounce">👆</span>
-                    <span>2. Click Hop!</span>
-                  </div>
+                  <ClickHandCursor isPressed={false} isContinuous={true} />
                 )}
               </div>
             </div>
