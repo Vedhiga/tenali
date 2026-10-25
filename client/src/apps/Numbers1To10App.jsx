@@ -466,6 +466,7 @@ export default function Numbers1To10App({
 
   // Hop to a specific position with animation
   const hopToPosition = useCallback((targetPos) => {
+    if (targetPos < 0 || (gameDiceTarget > 0 && targetPos > gameDiceTarget)) return;
     sfxBoing();
     // Video-game coin pickup sound when hopping forward onto a carrot
     if (targetPos > bunnyPos && targetPos <= gameDiceTarget) {
@@ -493,9 +494,10 @@ export default function Numbers1To10App({
       sfxBoing();
       return;
     }
-    if (bunnyPos >= 10 || gameDiceRolling) return;
+    // Stop hopping once reached the number shown in dice!
+    if (bunnyPos >= gameDiceTarget || targetReached || gameDiceRolling) return;
     hopToPosition(bunnyPos + 1);
-  }, [demoActive, hasRolled, bunnyPos, gameDiceRolling, hopToPosition, sfxBoing]);
+  }, [demoActive, hasRolled, bunnyPos, gameDiceTarget, targetReached, gameDiceRolling, hopToPosition, sfxBoing]);
 
   // Arrow control: Hop Left (backward)
   const hopLeft = useCallback(() => {
@@ -505,14 +507,14 @@ export default function Numbers1To10App({
       sfxBoing();
       return;
     }
-    if (bunnyPos <= 0 || gameDiceRolling) return;
+    if (bunnyPos <= 0 || targetReached || gameDiceRolling) return;
     hopToPosition(bunnyPos - 1);
-  }, [demoActive, hasRolled, bunnyPos, gameDiceRolling, hopToPosition, sfxBoing]);
+  }, [demoActive, hasRolled, bunnyPos, targetReached, gameDiceRolling, hopToPosition, sfxBoing]);
 
   // Keyboard navigation for arrow keys
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (demoActive) return;
+      if (demoActive || targetReached) return;
       if (e.key === 'ArrowRight' || e.key === 'Right') {
         e.preventDefault();
         hopRight();
@@ -523,7 +525,7 @@ export default function Numbers1To10App({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [demoActive, hopRight, hopLeft]);
+  }, [demoActive, targetReached, hopRight, hopLeft]);
 
   // Auto-play tutorial demo as soon as user enters the module
   useEffect(() => {
@@ -887,7 +889,7 @@ export default function Numbers1To10App({
                 type="button"
                 className="hop-arrow-btn"
                 onClick={hopLeft}
-                disabled={!hasRolled || bunnyPos <= 0 || gameDiceRolling}
+                disabled={!hasRolled || bunnyPos <= 0 || targetReached || gameDiceRolling}
                 title="Hop back"
               >
                 <span>◀</span> <span>Hop</span>
@@ -898,8 +900,8 @@ export default function Numbers1To10App({
                   type="button"
                   className={`hop-arrow-btn primary ${(hasRolled && bunnyPos === 0 && !demoCompleted) || (demoActive && demoHandPos.target === 'hop') ? 'demo-pulse-btn' : ''} ${(demoActive && demoHandPos.target === 'hop' && demoHandPos.clicking) ? 'is-demo-pressed' : ''}`}
                   onClick={hopRight}
-                  disabled={!hasRolled || bunnyPos >= 10 || gameDiceRolling || demoActive}
-                  title="Hop forward"
+                  disabled={!hasRolled || (gameDiceTarget > 0 && bunnyPos >= gameDiceTarget) || targetReached || gameDiceRolling || demoActive}
+                  title={targetReached ? `Reached Goal ${gameDiceTarget}!` : "Hop forward"}
                 >
                   <span>Hop</span> <span>▶</span>
                 </button>
@@ -937,7 +939,7 @@ export default function Numbers1To10App({
                 type="button"
                 className="numbers-btn-secondary reset-start-btn"
                 onClick={() => hopToPosition(0)}
-                disabled={!hasRolled || bunnyPos === 0}
+                disabled={!hasRolled || bunnyPos === 0 || targetReached}
                 title="Back to Start"
               >
                 <span>↺ Start</span>
