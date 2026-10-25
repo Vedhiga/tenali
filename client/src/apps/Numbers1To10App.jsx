@@ -50,7 +50,7 @@ export default function Numbers1To10App({
   const [discoveredNumbers, setDiscoveredNumbers] = useState(new Set());
 
   // Round message & lock
-  const [feedbackMsg, setFeedbackMsg] = useState('Tap "Roll Dice! 🎲" to see how many hops Bunny needs!');
+  const [feedbackMsg, setFeedbackMsg] = useState('🎲 Roll the die to play!');
   const [targetReached, setTargetReached] = useState(false);
 
   // Auto-roll timer ref
@@ -218,7 +218,7 @@ export default function Numbers1To10App({
       setGameDiceTarget(next);
       setHasRolled(true);
       setGameDiceRolling(false);
-      setFeedbackMsg(`Count the ${next} dots on the die! Use arrow keys to hop ${next} steps!`);
+      setFeedbackMsg(`🐰 Hop ${next} times!`);
     }, 280);
   }, [sfxDiceRoll]);
 
@@ -237,7 +237,7 @@ export default function Numbers1To10App({
       speakNumberName(target);
 
       setBunnyYayVisible(true);
-      setFeedbackMsg(`🎉 Fantastic! You reached the right card: ${target} (${NUMBER_WORDS[target]})!`);
+      setFeedbackMsg(`🎉 You reached ${target}!`);
 
       // Auto roll next round after celebration
       if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
@@ -246,9 +246,10 @@ export default function Numbers1To10App({
       }, 3200);
     } else if (newPos > target) {
       sfxBoing();
-      setFeedbackMsg(`Oops! You hopped past ${target}! Use ◀ Hop Left to step back to the glowing card.`);
+      setFeedbackMsg(`◀ Step back to ${target}!`);
     } else {
-      setFeedbackMsg(`Good hop! ${target - newPos} more step${target - newPos > 1 ? 's' : ''} to reach ${target}!`);
+      const left = target - newPos;
+      setFeedbackMsg(`🥕 ${left} more to go!`);
     }
   }, [awardStars, rollGameDice, sfxBoing, sfxSuccess, speakNumberName]);
 
@@ -267,7 +268,7 @@ export default function Numbers1To10App({
   // Arrow control: Hop Right (forward)
   const hopRight = useCallback(() => {
     if (!hasRolled) {
-      setFeedbackMsg('🎲 Tap "Roll Dice!" first to see how many hops Bunny needs!');
+      setFeedbackMsg('🎲 Roll the die first!');
       sfxBoing();
       return;
     }
@@ -278,7 +279,7 @@ export default function Numbers1To10App({
   // Arrow control: Hop Left (backward)
   const hopLeft = useCallback(() => {
     if (!hasRolled) {
-      setFeedbackMsg('🎲 Tap "Roll Dice!" first to see how many hops Bunny needs!');
+      setFeedbackMsg('🎲 Roll the die first!');
       sfxBoing();
       return;
     }
@@ -434,8 +435,8 @@ export default function Numbers1To10App({
             ← Back
           </button>
           <div className="numbers-header-title">
-            <h2>Tenali · Number Foundations</h2>
-            <span className="numbers-header-subtitle">Hopscotch Numbers (1 to 10)</span>
+            <h2>Tenali · Numbers 1 to 10</h2>
+            <span className="numbers-header-subtitle">Hop with Bunny! 🐰</span>
           </div>
         </div>
 
@@ -454,21 +455,18 @@ export default function Numbers1To10App({
         {/* Compact Section Header */}
         <div className="numbers-section-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span className="numbers-status-pill" style={{ fontSize: '0.76rem' }}>
-              🐰 Hopscotch Game
-            </span>
-            <h1 style={{ margin: 0, fontSize: 'clamp(1.15rem, 2vw, 1.4rem)' }}>
-              Hopscotch Mat Adventure
+            <h1 style={{ margin: 0, fontSize: 'clamp(1.2rem, 2.2vw, 1.45rem)' }}>
+              🐰 Hopscotch (1 to 10)
             </h1>
           </div>
 
           <button
             type="button"
             className="numbers-btn-secondary"
-            style={{ fontSize: '0.78rem', padding: '4px 12px' }}
+            style={{ fontSize: '0.8rem', padding: '5px 14px' }}
             onClick={() => setTutorialModalOpen(true)}
           >
-            <span>👀 How to Play</span>
+            <span>❓ Help</span>
           </button>
         </div>
 
@@ -496,7 +494,7 @@ export default function Numbers1To10App({
                 onClick={rollGameDice}
                 disabled={gameDiceRolling}
               >
-                <span>🎲</span> <span>{hasRolled ? 'Roll Again' : 'Roll Dice!'}</span>
+                <span>🎲</span> <span>{hasRolled ? 'Roll Again' : 'Roll!'}</span>
               </button>
 
               <p className="arena-feedback-msg" title={feedbackMsg}>
@@ -505,7 +503,7 @@ export default function Numbers1To10App({
             </div>
 
             <div className="numbers-status-pill compact arena-goal-pill">
-              <span>{hasRolled ? `🎯 Target: ${gameDiceTarget} Dots` : '🎲 Ready to Roll'}</span>
+              <span>{hasRolled ? `🎯 Goal: ${gameDiceTarget}` : '🎲 Roll!'}</span>
             </div>
           </div>
 
@@ -522,42 +520,64 @@ export default function Numbers1To10App({
             >
               {bunnyYayVisible && (
                 <div className="bunny-yay-bubble">
-                  HOP! ⭐ {NUMBER_WORDS[gameDiceTarget]}!
+                  ⭐ {gameDiceTarget}! {NUMBER_WORDS[gameDiceTarget]}!
                 </div>
               )}
               <span className="bunny-emoji">🐰</span>
             </div>
 
-            {/* Row 1: Start Position (Burrow above Card 1) + Route Guide */}
+            {/* Row 1: Start Position (Burrow above Card 1) + Visual Carrot Path */}
             <div className="track-top-row">
               {/* Column 1: Start Burrow directly above Card 1 */}
               <div
                 className={`start-burrow-above ${bunnyPos === 0 ? 'is-active-spot' : ''}`}
               >
-                <span className="start-burrow-badge">🌱 START (0)</span>
-                <span className="start-burrow-icon" style={{ opacity: bunnyPos === 0 ? 0.35 : 1 }}>🥕</span>
-                <span className="start-burrow-sub">
-                  {bunnyPos === 0 ? 'Resting' : 'Burrow'}
-                </span>
+                <span className="start-burrow-badge">🌱 START</span>
+                <span className="start-burrow-icon" style={{ opacity: bunnyPos === 0 ? 0.35 : 1, fontSize: '1.45rem' }}>🥕</span>
               </div>
 
-              {/* Columns 2-10: Route Info Banner */}
-              <div className="track-guide-banner">
-                <div className="track-guide-text">
-                  {!hasRolled ? (
-                    <span>🎲 Bunny is at Start! Tap <strong>"Roll Dice!"</strong> to see how many hops to take!</span>
-                  ) : bunnyPos === 0 ? (
-                    <span>✨ The first <strong>{gameDiceTarget}</strong> cards are glowing! Use arrow buttons or keys to hop! ⬇️</span>
-                  ) : targetReached ? (
-                    <span>🎉 <strong>Target reached!</strong> Card {gameDiceTarget} revealed: <strong>{NUMBER_WORDS[gameDiceTarget]}</strong>! ⭐</span>
-                  ) : bunnyPos < gameDiceTarget ? (
-                    <span>✨ Keep hopping with arrows! <strong>{gameDiceTarget - bunnyPos}</strong> more hop{gameDiceTarget - bunnyPos > 1 ? 's' : ''} to reach the right card!</span>
-                  ) : (
-                    <span>⚠️ Hopped past {gameDiceTarget}! Tap <strong>◀ Hop Left</strong> to step back.</span>
-                  )}
-                </div>
+              {/* Columns 2-10: Visual Carrot Trail (Zero text overload!) */}
+              <div className="track-guide-banner carrot-trail">
+                {!hasRolled ? (
+                  <div className="track-guide-visual">
+                    <span style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--clr-text-soft)' }}>
+                      🎲 Roll to start!
+                    </span>
+                  </div>
+                ) : targetReached ? (
+                  <div className="track-guide-visual">
+                    <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--clr-correct, #5cb87a)' }}>
+                      🎉 Found Card {gameDiceTarget}! ⭐ ⭐ ⭐
+                    </span>
+                  </div>
+                ) : (
+                  <div className="track-guide-visual">
+                    <div className="carrot-dots-list">
+                      {Array.from({ length: gameDiceTarget }).map((_, idx) => {
+                        const hopStep = idx + 1;
+                        const isHopped = bunnyPos >= hopStep;
+                        return (
+                          <span
+                            key={idx}
+                            className="carrot-dot"
+                            style={{
+                              fontSize: isHopped ? '1.15rem' : '1.35rem',
+                              opacity: isHopped ? 0.35 : 1,
+                              transform: isHopped ? 'scale(0.85)' : 'scale(1.1)',
+                              transition: 'all 0.2s ease',
+                              display: 'inline-block'
+                            }}
+                          >
+                            {isHopped ? '🐾' : '🥕'}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <span className="carrot-goal-badge">➔ ⭐ {gameDiceTarget}</span>
+                  </div>
+                )}
                 <div className="track-target-pill">
-                  <span>{hasRolled ? `🎯 Goal: Card ${gameDiceTarget}` : '🎲 Roll to Begin'}</span>
+                  <span>🎯 {hasRolled ? gameDiceTarget : 'Roll!'}</span>
                 </div>
               </div>
             </div>
@@ -607,9 +627,9 @@ export default function Numbers1To10App({
                 className="hop-arrow-btn"
                 onClick={hopLeft}
                 disabled={!hasRolled || bunnyPos <= 0 || gameDiceRolling}
-                title="Hop backward (Left Arrow)"
+                title="Hop back"
               >
-                <span>◀</span> <span>Hop Left</span>
+                <span>◀</span> <span>Hop</span>
               </button>
 
               <button
@@ -617,16 +637,16 @@ export default function Numbers1To10App({
                 className="hop-arrow-btn primary"
                 onClick={hopRight}
                 disabled={!hasRolled || bunnyPos >= 10 || gameDiceRolling}
-                title="Hop forward (Right Arrow)"
+                title="Hop forward"
               >
-                <span>Hop Right</span> <span>▶</span>
+                <span>Hop</span> <span>▶</span>
               </button>
             </div>
 
             <div className="hop-step-indicator">
-              <span>🐰 Step: <strong>{bunnyPos === 0 ? 'Start (0)' : bunnyPos}</strong></span>
+              <span>🐰 <strong>{bunnyPos === 0 ? 'Start' : bunnyPos}</strong></span>
               <span>/</span>
-              <span>Target: <strong>{hasRolled ? `${gameDiceTarget} (${NUMBER_WORDS[gameDiceTarget]})` : 'Roll die first'}</strong></span>
+              <span>🎯 <strong>{hasRolled ? gameDiceTarget : '?'}</strong></span>
             </div>
 
             <div className="hop-actions-group">
@@ -641,16 +661,16 @@ export default function Numbers1To10App({
                 }}
                 aria-hidden={!targetReached}
               >
-                <span>🎲 Next Roll</span>
+                <span>Next 🎲</span>
               </button>
               <button
                 type="button"
                 className="numbers-btn-secondary reset-start-btn"
                 onClick={() => hopToPosition(0)}
                 disabled={!hasRolled || bunnyPos === 0}
-                title="Reset Bunny to Start Burrow"
+                title="Back to Start"
               >
-                Reset to Start (0)
+                <span>↺ Start</span>
               </button>
             </div>
           </div>
@@ -673,62 +693,36 @@ export default function Numbers1To10App({
               ✕
             </button>
             <h2 style={{ fontFamily: 'var(--font-display, Georgia, serif)', fontSize: '1.4rem', fontWeight: 700, color: 'var(--clr-text)', margin: '0 0 6px 0' }}>
-              How to Play Hopscotch Mat
+              How to Play 🐰
             </h2>
-            <p style={{ fontSize: '0.88rem', color: 'var(--clr-text-soft)', marginBottom: '16px' }}>
-              Count the dots on the die, then use the arrow buttons to help Bunny hop across the glowing cards to reach the matching number!
+            <p style={{ fontSize: '0.92rem', color: 'var(--clr-text-soft)', marginBottom: '16px' }}>
+              Roll the die and hop with Bunny to find the number!
             </p>
 
             <div style={{
-              background: 'var(--clr-surface)',
-              border: '1px solid var(--clr-border)',
-              borderRadius: 'var(--radius)',
-              padding: '16px',
-              marginBottom: '20px',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-around'
+              flexDirection: 'column',
+              gap: '10px',
+              textAlign: 'left',
+              marginBottom: '20px',
+              background: 'var(--clr-surface)',
+              padding: '14px',
+              borderRadius: 'var(--radius)',
+              border: '1px solid var(--clr-border)'
             }}>
-              <div style={{
-                width: '54px',
-                height: '54px',
-                background: '#fff',
-                border: '2px solid #111',
-                borderRadius: '12px',
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                padding: '6px',
-                placeItems: 'center'
-              }}>
-                <div style={{ width: '8px', height: '8px', background: '#111', borderRadius: '50%' }} /><div /><div />
-                <div /><div style={{ width: '8px', height: '8px', background: '#111', borderRadius: '50%' }} /><div />
-                <div /><div /><div style={{ width: '8px', height: '8px', background: '#111', borderRadius: '50%' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.92rem' }}>
+                <span style={{ fontSize: '1.4rem' }}>🎲</span>
+                <span><strong>1. Roll</strong> the die to see where to hop!</span>
               </div>
-              <span style={{ fontSize: '1.6rem', color: 'var(--clr-accent)' }}>➔</span>
-              <div style={{
-                width: '50px',
-                height: '60px',
-                background: 'var(--clr-input)',
-                border: '2px solid var(--clr-accent)',
-                borderRadius: '10px',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <span style={{ fontFamily: 'var(--font-display, Georgia, serif)', fontSize: '1.4rem', fontWeight: 700, color: 'var(--clr-accent)' }}>
-                  3
-                </span>
-                <span style={{ fontSize: '0.7rem' }}>⭐</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.92rem' }}>
+                <span style={{ fontSize: '1.4rem' }}>🐰</span>
+                <span><strong>2. Tap Hop ▶</strong> to step across cards!</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.92rem' }}>
+                <span style={{ fontSize: '1.4rem' }}>⭐</span>
+                <span><strong>3. Land</strong> on the glowing card to reveal it!</span>
               </div>
             </div>
-
-            <p style={{ fontSize: '0.82rem', color: 'var(--clr-text-soft)', marginBottom: '16px', textAlign: 'left', lineHeight: 1.5 }}>
-              💡 <strong>Tips:</strong><br />
-              1. Bunny starts outside at <strong>🌱 START</strong>.<br />
-              2. As you tap <strong>Hop Right ▶</strong>, cards stop glowing as Bunny steps on them.<br />
-              3. When Bunny reaches the matching card, it flips to reveal the number and speaks the number name out loud!
-            </p>
 
             <button
               type="button"
@@ -736,7 +730,7 @@ export default function Numbers1To10App({
               style={{ width: '100%', justifyContent: 'center' }}
               onClick={() => setTutorialModalOpen(false)}
             >
-              👍 Let's Hop!
+              Let's Play! 🚀
             </button>
           </div>
         </div>
