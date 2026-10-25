@@ -198,14 +198,14 @@ export default function Numbers1To10App({
     }
   }, [sfxTone]);
 
-  // Voice speech pronunciation
+  // Voice speech pronunciation (speaks number name when hopping)
   const speakNumberName = useCallback((num) => {
     if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
         const word = NUMBER_WORDS[num] || String(num);
         const utt = new SpeechSynthesisUtterance(word);
-        utt.rate = 0.85;
+        utt.rate = 0.95;
         utt.pitch = 1.15;
         window.speechSynthesis.speak(utt);
       } catch {
@@ -355,14 +355,16 @@ export default function Numbers1To10App({
         // Move hand down to Hop button
         setDemoHandPos({ target: 'hop', clicking: false });
 
-        // Sequential 8 hops to demonstrate the full path to 8
-        const hopDelayBase = 680;
+        // Sequential 8 hops to demonstrate the full path to 8 with voice counting
+        const hopDelayBase = 720;
         for (let hopNum = 1; hopNum <= 8; hopNum++) {
           const hopTimer = setTimeout(() => {
             setDemoHandPos({ target: 'hop', clicking: true });
             sfxClick();
             sfxBoing();
             setTimeout(() => sfxCoin(), 60);
+            // Voice counts the number for each hop out loud!
+            speakNumberName(hopNum);
             setBunnyHopSpring(true);
             setBunnyPos(hopNum);
             setDemoStep(3 + hopNum);
@@ -377,7 +379,6 @@ export default function Numbers1To10App({
                 setTargetReached(true);
                 sfxSuccess();
                 setRevealedPad(8);
-                speakNumberName(8);
                 setBunnyYayVisible(true);
                 setFeedbackMsg('🎉 Demo: Reached 8! Card flips and reveals! ⭐');
 
@@ -446,9 +447,6 @@ export default function Numbers1To10App({
       setRevealedPad(target);
       setDiscoveredNumbers(prev => new Set(prev).add(target));
 
-      // Announce the number name via Speech Synthesis!
-      speakNumberName(target);
-
       setBunnyYayVisible(true);
       setFeedbackMsg(`🎉 You reached ${target}!`);
 
@@ -473,6 +471,10 @@ export default function Numbers1To10App({
     if (targetPos > bunnyPos && targetPos <= gameDiceTarget) {
       setTimeout(() => sfxCoin(), 70);
     }
+    // Voice counts the number on every hop (without revealing the card)!
+    if (targetPos >= 1 && targetPos <= 10) {
+      speakNumberName(targetPos);
+    }
     setBunnyHopSpring(true);
     setBunnyPos(targetPos);
     if (!demoCompleted) setDemoCompleted(true);
@@ -481,7 +483,7 @@ export default function Numbers1To10App({
       setBunnyHopSpring(false);
       handleBunnyLanded(targetPos, gameDiceTarget);
     }, 320);
-  }, [bunnyPos, demoCompleted, gameDiceTarget, handleBunnyLanded, sfxBoing, sfxCoin]);
+  }, [bunnyPos, demoCompleted, gameDiceTarget, handleBunnyLanded, sfxBoing, sfxCoin, speakNumberName]);
 
   // Arrow control: Hop Right (forward)
   const hopRight = useCallback(() => {
