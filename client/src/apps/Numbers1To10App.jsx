@@ -58,6 +58,12 @@ export default function Numbers1To10App({
   // Interactive demo guide state (guides first-time play: 1. Click Roll -> 2. Click Hop)
   const [demoCompleted, setDemoCompleted] = useState(false);
 
+  // Subway Surfers / Temple Run style interactive tutorial demo state
+  const [demoActive, setDemoActive] = useState(false);
+  const [demoStep, setDemoStep] = useState(0);
+  const [demoHandPos, setDemoHandPos] = useState({ target: 'none', clicking: false });
+  const demoTimersRef = useRef([]);
+
   // Round message & lock
   const [feedbackMsg, setFeedbackMsg] = useState('🎲 Roll the die to play!');
   const [targetReached, setTargetReached] = useState(false);
@@ -261,8 +267,153 @@ export default function Numbers1To10App({
     10: [6, 4]
   };
 
+  // Clear all demo timers safely
+  const clearDemoTimers = useCallback(() => {
+    demoTimersRef.current.forEach(t => clearTimeout(t));
+    demoTimersRef.current = [];
+  }, []);
+
+  // Stop / Skip demo and restore game to fresh start
+  const stopDemo = useCallback(() => {
+    clearDemoTimers();
+    setDemoActive(false);
+    setDemoStep(0);
+    setDemoHandPos({ target: 'none', clicking: false });
+    setBunnyPos(0);
+    setHasRolled(false);
+    setGameDiceTarget(0);
+    setCurrentDiceValues([0]);
+    setRevealedPad(null);
+    setTargetReached(false);
+    setBunnyYayVisible(false);
+    setFeedbackMsg('🎲 Roll the die to play!');
+  }, [clearDemoTimers]);
+
+  // Subway Surfers / Temple Run Style Animated Playable Tutorial Demo
+  const startDemo = useCallback(() => {
+    clearDemoTimers();
+    if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
+    // Reset state for tutorial run
+    setBunnyPos(0);
+    setHasRolled(false);
+    setGameDiceTarget(0);
+    setCurrentDiceValues([0]);
+    setRevealedPad(null);
+    setTargetReached(false);
+    setBunnyYayVisible(false);
+    setTutorialModalOpen(false);
+    setDemoActive(true);
+    setDemoStep(1);
+    setDemoHandPos({ target: 'roll', clicking: false });
+    setFeedbackMsg('🎬 Demo: Tap Roll to start!');
+
+    // Step 1: Hand taps Roll Dice at t = 1.3s
+    const t1 = setTimeout(() => {
+      setDemoHandPos({ target: 'roll', clicking: true });
+      sfxClick();
+      sfxDiceRoll();
+      setGameDiceRolling(true);
+
+      const t2 = setTimeout(() => {
+        setDemoHandPos({ target: 'roll', clicking: false });
+        const demoTarget = 3;
+        setGameDiceTarget(demoTarget);
+        setCurrentDiceValues([demoTarget]);
+        setHasRolled(true);
+        setGameDiceRolling(false);
+        setDemoStep(3);
+        setFeedbackMsg('🎬 Demo: Rolled 3! Now tap Hop ▶ to collect carrots!');
+        // Move hand down to Hop button
+        setDemoHandPos({ target: 'hop', clicking: false });
+
+        // Step 2: Hand taps Hop 1 at t = 1.3s
+        const t3 = setTimeout(() => {
+          setDemoHandPos({ target: 'hop', clicking: true });
+          sfxClick();
+          sfxBoing();
+          setTimeout(() => sfxCoin(), 70);
+          setBunnyHopSpring(true);
+          setBunnyPos(1);
+          setDemoStep(4);
+          setFeedbackMsg('🎬 Demo: Bunny hops & collects carrot 1! 🥕');
+
+          const t4 = setTimeout(() => {
+            setBunnyHopSpring(false);
+            setDemoHandPos({ target: 'hop', clicking: false });
+
+            // Step 3: Hand taps Hop 2 at t = 1.1s
+            const t5 = setTimeout(() => {
+              setDemoHandPos({ target: 'hop', clicking: true });
+              sfxClick();
+              sfxBoing();
+              setTimeout(() => sfxCoin(), 70);
+              setBunnyHopSpring(true);
+              setBunnyPos(2);
+              setDemoStep(5);
+              setFeedbackMsg('🎬 Demo: Bunny hops & collects carrot 2! 🥕');
+
+              const t6 = setTimeout(() => {
+                setBunnyHopSpring(false);
+                setDemoHandPos({ target: 'hop', clicking: false });
+
+                // Step 4: Hand taps Hop 3 (Goal!) at t = 1.1s
+                const t7 = setTimeout(() => {
+                  setDemoHandPos({ target: 'hop', clicking: true });
+                  sfxClick();
+                  sfxBoing();
+                  setTimeout(() => sfxCoin(), 70);
+                  setBunnyHopSpring(true);
+                  setBunnyPos(3);
+                  setDemoStep(6);
+
+                  const t8 = setTimeout(() => {
+                    setBunnyHopSpring(false);
+                    setDemoHandPos({ target: 'none', clicking: false });
+                    setTargetReached(true);
+                    sfxSuccess();
+                    setRevealedPad(3);
+                    speakNumberName(3);
+                    setBunnyYayVisible(true);
+                    setFeedbackMsg('🎉 Demo: Reached 3! Card flips and reveals! ⭐');
+
+                    if (confettiInstanceRef.current) {
+                      try {
+                        confettiInstanceRef.current({
+                          particleCount: 50,
+                          spread: 60,
+                          origin: { y: 0.7 }
+                        });
+                      } catch {
+                        // safe fallback
+                      }
+                    }
+
+                    // Step 5: Finish screen at t = 1.2s
+                    const t9 = setTimeout(() => {
+                      setDemoStep(7);
+                    }, 1200);
+                    demoTimersRef.current.push(t9);
+                  }, 320);
+                  demoTimersRef.current.push(t8);
+                }, 1100);
+                demoTimersRef.current.push(t7);
+              }, 320);
+              demoTimersRef.current.push(t6);
+            }, 1100);
+            demoTimersRef.current.push(t5);
+          }, 320);
+          demoTimersRef.current.push(t4);
+        }, 1300);
+        demoTimersRef.current.push(t3);
+      }, 350);
+      demoTimersRef.current.push(t2);
+    }, 1300);
+    demoTimersRef.current.push(t1);
+  }, [clearDemoTimers, sfxBoing, sfxClick, sfxCoin, sfxDiceRoll, sfxSuccess, speakNumberName]);
+
   // Roll die with random count from 1 to 10
   const rollGameDice = useCallback(() => {
+    if (demoActive) return;
     if (gameDiceRolling) return;
     if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
     sfxDiceRoll();
@@ -284,7 +435,7 @@ export default function Numbers1To10App({
       setGameDiceRolling(false);
       setFeedbackMsg(`🐰 Hop ${next} times!`);
     }, 280);
-  }, [gameDiceRolling, getNextRandomNumber, sfxDiceRoll]);
+  }, [demoActive, gameDiceRolling, getNextRandomNumber, sfxDiceRoll]);
 
   // Check if bunny has landed on target
   const handleBunnyLanded = useCallback((newPos, target) => {
@@ -336,6 +487,7 @@ export default function Numbers1To10App({
 
   // Arrow control: Hop Right (forward)
   const hopRight = useCallback(() => {
+    if (demoActive) return;
     if (!hasRolled) {
       setFeedbackMsg('🎲 Roll the die first!');
       sfxBoing();
@@ -343,10 +495,11 @@ export default function Numbers1To10App({
     }
     if (bunnyPos >= 10 || gameDiceRolling) return;
     hopToPosition(bunnyPos + 1);
-  }, [hasRolled, bunnyPos, gameDiceRolling, hopToPosition, sfxBoing]);
+  }, [demoActive, hasRolled, bunnyPos, gameDiceRolling, hopToPosition, sfxBoing]);
 
   // Arrow control: Hop Left (backward)
   const hopLeft = useCallback(() => {
+    if (demoActive) return;
     if (!hasRolled) {
       setFeedbackMsg('🎲 Roll the die first!');
       sfxBoing();
@@ -354,11 +507,12 @@ export default function Numbers1To10App({
     }
     if (bunnyPos <= 0 || gameDiceRolling) return;
     hopToPosition(bunnyPos - 1);
-  }, [hasRolled, bunnyPos, gameDiceRolling, hopToPosition, sfxBoing]);
+  }, [demoActive, hasRolled, bunnyPos, gameDiceRolling, hopToPosition, sfxBoing]);
 
   // Keyboard navigation for arrow keys
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (demoActive) return;
       if (e.key === 'ArrowRight' || e.key === 'Right') {
         e.preventDefault();
         hopRight();
@@ -369,14 +523,27 @@ export default function Numbers1To10App({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hopRight, hopLeft]);
+  }, [demoActive, hopRight, hopLeft]);
 
-  // Clean up auto-roll timer on unmount
+  // Auto-play tutorial demo once on first load after short delay
+  useEffect(() => {
+    const demoPlayed = sessionStorage.getItem('tenali_numbers_tutorial_demo_seen');
+    if (!demoPlayed) {
+      sessionStorage.setItem('tenali_numbers_tutorial_demo_seen', 'true');
+      const timer = setTimeout(() => {
+        startDemo();
+      }, 700);
+      demoTimersRef.current.push(timer);
+    }
+  }, [startDemo]);
+
+  // Clean up timers on unmount
   useEffect(() => {
     return () => {
+      clearDemoTimers();
       if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
     };
-  }, []);
+  }, [clearDemoTimers]);
 
   // Dice Pip Face Component (Standard 1 to 6 dots on 3x3 grid)
   const DiceFace = ({ count, isDuo = false }) => {
@@ -481,9 +648,10 @@ export default function Numbers1To10App({
             type="button"
             className="numbers-btn-secondary"
             style={{ fontSize: '0.8rem', padding: '5px 14px' }}
-            onClick={() => setTutorialModalOpen(true)}
+            onClick={startDemo}
+            title="Watch tutorial demo"
           >
-            <span>🎬 Demo</span>
+            <span>🎬 Watch Demo</span>
           </button>
         </div>
 
@@ -515,13 +683,21 @@ export default function Numbers1To10App({
               <div style={{ position: 'relative', display: 'inline-flex' }}>
                 <button
                   type="button"
-                  className={`numbers-btn-primary compact ${!hasRolled ? 'demo-pulse-btn' : ''}`}
+                  className={`numbers-btn-primary compact ${!hasRolled || (demoActive && demoHandPos.target === 'roll') ? 'demo-pulse-btn' : ''}`}
                   onClick={rollGameDice}
-                  disabled={gameDiceRolling}
+                  disabled={gameDiceRolling || demoActive}
                 >
                   <span>🎲</span> <span>{hasRolled ? 'Roll Again' : 'Roll!'}</span>
                 </button>
-                {!hasRolled && !demoCompleted && (
+                {/* Subway Surfers Tutorial Demo Hand Cursor */}
+                {demoActive && demoHandPos.target === 'roll' && (
+                  <div className={`demo-hand-cursor ${demoHandPos.clicking ? 'clicking' : ''}`}>
+                    <span className="hand-pointer-emoji">👆</span>
+                    <span className="hand-action-bubble">1. Tap Roll!</span>
+                    {demoHandPos.clicking && <div className="hand-tap-ring" />}
+                  </div>
+                )}
+                {!demoActive && !hasRolled && !demoCompleted && (
                   <div className="demo-guide-callout roll-callout">
                     <span className="demo-hand-bounce">👆</span>
                     <span>1. Click Roll!</span>
@@ -570,7 +746,31 @@ export default function Numbers1To10App({
 
               {/* Columns 2-10: Clean Guide Banner without separate carrots */}
               <div className="track-guide-banner">
-                {!hasRolled ? (
+                {demoActive ? (
+                  <div className="demo-active-banner">
+                    <div className="demo-live-badge">
+                      <span className="demo-live-dot" />
+                      <span>TUTORIAL DEMO</span>
+                    </div>
+                    <span className="demo-live-text">
+                      {demoStep === 1 && '1. Watch: Tap Roll Dice 🎲'}
+                      {demoStep === 2 && '🎲 Rolling the dice...'}
+                      {demoStep === 3 && '2. Watch: Tap Hop ▶ to jump!'}
+                      {demoStep === 4 && '🐰 Hop to 1: Carrot collected! 🥕'}
+                      {demoStep === 5 && '🐰 Hop to 2: Carrot collected! 🥕'}
+                      {demoStep === 6 && '🎉 Reached Goal 3! Card flips! ⭐'}
+                      {demoStep === 7 && "⭐ Tutorial Finished! ⭐"}
+                    </span>
+                    <button
+                      type="button"
+                      className="demo-skip-btn"
+                      onClick={stopDemo}
+                      title="Skip Demo & Play"
+                    >
+                      <span>Skip ✕</span>
+                    </button>
+                  </div>
+                ) : !hasRolled ? (
                   <div className="demo-track-guide">
                     <span className="demo-step-chip">🎬 Quick Demo</span>
                     <span className="demo-guide-step">
@@ -594,11 +794,36 @@ export default function Numbers1To10App({
                     </span>
                   </div>
                 )}
-                <div className="track-target-pill">
-                  <span>🎯 {hasRolled ? gameDiceTarget : 'Roll!'}</span>
-                </div>
+                {!demoActive && (
+                  <div className="track-target-pill">
+                    <span>🎯 {hasRolled ? gameDiceTarget : 'Roll!'}</span>
+                  </div>
+                )}
               </div>
             </div>
+
+            {/* Subway Surfers / Temple Run Finish Screen */}
+            {demoActive && demoStep === 7 && (
+              <div className="demo-finish-overlay">
+                <div className="demo-finish-card">
+                  <span style={{ fontSize: '2.4rem', lineHeight: 1 }}>🎉</span>
+                  <h3 style={{ margin: '6px 0 2px 0', fontSize: '1.25rem', color: '#ede8e3', fontWeight: 800 }}>
+                    Tutorial Complete!
+                  </h3>
+                  <p style={{ margin: '0 0 14px 0', fontSize: '0.88rem', color: '#a89e94', lineHeight: 1.35 }}>
+                    You're ready to play! Roll the dice and hop with Bunny! 🐰🥕
+                  </p>
+                  <button
+                    type="button"
+                    className="numbers-btn-primary"
+                    onClick={stopDemo}
+                    style={{ padding: '9px 24px', fontSize: '0.95rem' }}
+                  >
+                    <span>Let's Play! 🚀</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Row 2: Hopping Lane between Top Row and Cards */}
             <div className="track-hop-lane" />
@@ -678,14 +903,22 @@ export default function Numbers1To10App({
               <div style={{ position: 'relative', display: 'inline-flex' }}>
                 <button
                   type="button"
-                  className={`hop-arrow-btn primary ${hasRolled && bunnyPos === 0 && !demoCompleted ? 'demo-pulse-btn' : ''}`}
+                  className={`hop-arrow-btn primary ${(hasRolled && bunnyPos === 0 && !demoCompleted) || (demoActive && demoHandPos.target === 'hop') ? 'demo-pulse-btn' : ''}`}
                   onClick={hopRight}
-                  disabled={!hasRolled || bunnyPos >= 10 || gameDiceRolling}
+                  disabled={!hasRolled || bunnyPos >= 10 || gameDiceRolling || demoActive}
                   title="Hop forward"
                 >
                   <span>Hop</span> <span>▶</span>
                 </button>
-                {hasRolled && bunnyPos === 0 && !demoCompleted && (
+                {/* Subway Surfers Tutorial Demo Hand Cursor */}
+                {demoActive && demoHandPos.target === 'hop' && (
+                  <div className={`demo-hand-cursor ${demoHandPos.clicking ? 'clicking' : ''}`}>
+                    <span className="hand-pointer-emoji">👆</span>
+                    <span className="hand-action-bubble">2. Tap Hop!</span>
+                    {demoHandPos.clicking && <div className="hand-tap-ring" />}
+                  </div>
+                )}
+                {!demoActive && hasRolled && bunnyPos === 0 && !demoCompleted && (
                   <div className="demo-guide-callout hop-callout">
                     <span className="demo-hand-bounce">👆</span>
                     <span>2. Click Hop!</span>
