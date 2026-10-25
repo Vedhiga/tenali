@@ -523,16 +523,16 @@ export default function Numbers1To10App({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [demoActive, hopRight, hopLeft]);
 
-  // Auto-play tutorial demo once on first load after short delay
+  // Auto-play tutorial demo as soon as user enters the module
   useEffect(() => {
-    const demoPlayed = sessionStorage.getItem('tenali_numbers_tutorial_demo_seen');
-    if (!demoPlayed) {
-      sessionStorage.setItem('tenali_numbers_tutorial_demo_seen', 'true');
-      const timer = setTimeout(() => {
-        startDemo();
-      }, 700);
-      demoTimersRef.current.push(timer);
-    }
+    const timer = setTimeout(() => {
+      startDemo();
+    }, 200);
+    demoTimersRef.current.push(timer);
+
+    return () => {
+      clearTimeout(timer);
+    };
   }, [startDemo]);
 
   // Clean up timers on unmount
