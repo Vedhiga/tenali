@@ -146,6 +146,12 @@ export default function Numbers1To10App({
     setTimeout(() => sfxTone(550, 'sine', 0.12, 0.2), 60);
   }, [sfxTone]);
 
+  // Video-game coin pickup chime (classic B5 -> E6 crystal chime)
+  const sfxCoin = useCallback(() => {
+    sfxTone(987.77, 'sine', 0.07, 0.18);
+    setTimeout(() => sfxTone(1318.51, 'sine', 0.24, 0.22), 65);
+  }, [sfxTone]);
+
   const sfxDiceRoll = useCallback(() => {
     for (let i = 0; i < 4; i++) {
       setTimeout(() => {
@@ -311,6 +317,10 @@ export default function Numbers1To10App({
   // Hop to a specific position with animation
   const hopToPosition = useCallback((targetPos) => {
     sfxBoing();
+    // Video-game coin pickup sound when hopping forward onto a carrot coin
+    if (targetPos > bunnyPos && targetPos <= gameDiceTarget) {
+      setTimeout(() => sfxCoin(), 70);
+    }
     setBunnyHopSpring(true);
     setBunnyPos(targetPos);
 
@@ -318,7 +328,7 @@ export default function Numbers1To10App({
       setBunnyHopSpring(false);
       handleBunnyLanded(targetPos, gameDiceTarget);
     }, 320);
-  }, [gameDiceTarget, handleBunnyLanded, sfxBoing]);
+  }, [bunnyPos, gameDiceTarget, handleBunnyLanded, sfxBoing, sfxCoin]);
 
   // Arrow control: Hop Right (forward)
   const hopRight = useCallback(() => {
@@ -612,6 +622,32 @@ export default function Numbers1To10App({
                     className="hop-card-container"
                     title={isRevealed ? `${padNum} (${NUMBER_WORDS[padNum]})` : undefined}
                   >
+                    {/* Floating Video-Game Carrot Coin over Glowing Cards */}
+                    {isGlowing && (
+                      <div
+                        className="card-coin-wrapper"
+                        style={{
+                          animationDelay: `${(padNum - 1) * 0.12}s`
+                        }}
+                      >
+                        <div
+                          className="game-coin-carrot"
+                          style={{
+                            animationDelay: `${(padNum - 1) * 0.12}s`
+                          }}
+                        >
+                          <span className="coin-shine" />
+                          <span className="coin-carrot-emoji">🥕</span>
+                        </div>
+                        <div
+                          className="coin-ground-shadow"
+                          style={{
+                            animationDelay: `${(padNum - 1) * 0.12}s`
+                          }}
+                        />
+                      </div>
+                    )}
+
                     <div className={cardInnerClass}>
                       {/* Blank Card Face (Unrevealed - completely blank!) */}
                       <div className="hop-card-face hop-card-back" />

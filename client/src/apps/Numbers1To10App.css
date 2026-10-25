@@ -644,6 +644,101 @@
   max-height: 94px;
   width: 100%;
   box-sizing: border-box;
+  position: relative;
+}
+
+/* ==========================================================================
+   VIDEO GAME CARROT COINS (HOVERING OVER GLOWING CARDS)
+   ========================================================================== */
+.card-coin-wrapper {
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+  pointer-events: none;
+  user-select: none;
+}
+
+.game-coin-carrot {
+  width: clamp(24px, 3.6vw, 34px);
+  height: clamp(24px, 3.6vw, 34px);
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #fff59d 0%, #ffb300 45%, #f57c00 78%, #bf360c 100%);
+  border: 2px solid #fffde7;
+  box-shadow: 0 0 16px rgba(255, 179, 0, 0.9),
+              0 4px 10px rgba(0, 0, 0, 0.45),
+              inset 0 2px 4px rgba(255, 255, 255, 0.85),
+              inset 0 -2px 3px rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  animation: coinHover 1.5s ease-in-out infinite, coinShineGlint 3s ease-in-out infinite;
+  transform-origin: center bottom;
+  box-sizing: border-box;
+}
+
+.coin-carrot-emoji {
+  font-size: clamp(13px, 2.1vw, 18px);
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  transform: translateY(-0.5px);
+  user-select: none;
+}
+
+.coin-shine {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  width: 38%;
+  height: 32%;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0) 100%);
+  pointer-events: none;
+}
+
+.coin-ground-shadow {
+  width: clamp(14px, 2.2vw, 20px);
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 70%);
+  margin-top: 3px;
+  filter: blur(1px);
+  animation: coinShadowScale 1.5s ease-in-out infinite;
+}
+
+@keyframes coinHover {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-9px);
+  }
+}
+
+@keyframes coinShadowScale {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  50% {
+    transform: scale(0.6);
+    opacity: 0.2;
+  }
+}
+
+@keyframes coinShineGlint {
+  0%, 75%, 100% {
+    filter: brightness(1);
+  }
+  85% {
+    filter: brightness(1.35) drop-shadow(0 0 10px rgba(255, 255, 255, 0.85));
+  }
 }
 
 .hop-card-inner {
