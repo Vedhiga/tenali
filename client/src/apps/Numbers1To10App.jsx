@@ -924,19 +924,6 @@ export default function Numbers1To10App({
             <div className="hop-actions-group">
               <button
                 type="button"
-                className="numbers-btn-primary next-roll-btn"
-                onClick={rollGameDice}
-                disabled={gameDiceRolling || !targetReached}
-                style={{
-                  visibility: targetReached ? 'visible' : 'hidden',
-                  pointerEvents: targetReached ? 'auto' : 'none'
-                }}
-                aria-hidden={!targetReached}
-              >
-                <span>Next 🎲</span>
-              </button>
-              <button
-                type="button"
                 className="numbers-btn-secondary reset-start-btn"
                 onClick={() => hopToPosition(0)}
                 disabled={!hasRolled || bunnyPos === 0 || targetReached}
