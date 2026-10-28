@@ -450,11 +450,11 @@ export default function Numbers1To10App({
       setBunnyYayVisible(true);
       setFeedbackMsg(`🎉 You reached ${target}!`);
 
-      // Auto roll next round after celebration
+      // Auto roll next round after celebration (3 seconds)
       if (autoRollTimerRef.current) clearTimeout(autoRollTimerRef.current);
       autoRollTimerRef.current = setTimeout(() => {
         rollGameDice();
-      }, 3200);
+      }, 3000);
     } else if (newPos > target) {
       sfxBoing();
       setFeedbackMsg(`◀ Step back to ${target}!`);
