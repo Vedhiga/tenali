@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
 import SpaceMazeAdventure from './SpaceMazeAdventure.jsx';
+import NumberTracingApp from './NumberTracingApp.jsx';
 import './Numbers1To10App.css';
 
 const NUMBER_WORDS = {
@@ -62,7 +63,7 @@ export default function Numbers1To10App({
   markTopicCompleted,
   updateCoins
 }) {
-  const [activeTab, setActiveTab] = useState('hopscotch'); // 'hopscotch' | 'maze'
+  const [activeTab, setActiveTab] = useState('trace'); // 'trace' | 'hopscotch' | 'maze'
   const [starCount, setStarCount] = useState(0);
   const [starBump, setStarBump] = useState(false);
 
@@ -642,6 +643,13 @@ export default function Numbers1To10App({
       <nav className="numbers-tab-nav" aria-label="Activity Mode Selection">
         <button
           type="button"
+          className={`numbers-tab-btn ${activeTab === 'trace' ? 'active' : ''}`}
+          onClick={() => { sfxClick(); setActiveTab('trace'); }}
+        >
+          <span>✍️</span> <span>Learn & Trace</span>
+        </button>
+        <button
+          type="button"
           className={`numbers-tab-btn ${activeTab === 'hopscotch' ? 'active' : ''}`}
           onClick={() => { sfxClick(); setActiveTab('hopscotch'); }}
         >
@@ -655,6 +663,17 @@ export default function Numbers1To10App({
           <span>🚀</span> <span>Space Maze</span>
         </button>
       </nav>
+
+      {/* ============================================================ */}
+      {/* TAB 1: LEARN & TRACE FOUNDATIONS                            */}
+      {/* ============================================================ */}
+      {activeTab === 'trace' && (
+        <NumberTracingApp
+          onAwardStars={awardStars}
+          markTopicCompleted={markTopicCompleted}
+          onNavigateMaze={() => { sfxClick(); setActiveTab('maze'); }}
+        />
+      )}
 
       {/* ============================================================ */}
       {/* TAB 1: HOPSCOTCH MAT ADVENTURE GAME                          */}
