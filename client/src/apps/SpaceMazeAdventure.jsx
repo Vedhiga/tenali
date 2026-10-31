@@ -92,8 +92,7 @@ const ALL_NODES = [
   [355, 180]  // St 10
 ];
 
-const ALL_EDGES = [
-  [0, 1], [1, 2], [1, 7], [1, 8],
+const ALL_EDGES = [ [1, 2], [1, 7], [1, 8],
   [2, 3], [2, 7],
   [3, 4], [3, 5],
   [4, 5],
@@ -143,6 +142,7 @@ function getBezierPoint(a, b, t) {
 }
 
 function findShortestPath(startNode, endNode, maxN) {
+  if (startNode === endNode) return [startNode];
   const queue = [startNode];
   const visited = {};
   const parent = {};
@@ -154,6 +154,7 @@ function findShortestPath(startNode, endNode, maxN) {
 
     for (let i = 0; i < ALL_EDGES.length; i++) {
       const edge = ALL_EDGES[i];
+      if (edge[0] === 0 || edge[1] === 0) continue;
       if (edge[0] > maxN || edge[1] > maxN) continue;
       let next = -1;
       if (edge[0] === curr) next = edge[1];
@@ -176,6 +177,27 @@ function findShortestPath(startNode, endNode, maxN) {
   return path;
 }
 
+function getSaturnCoords(nodePos) {
+  if (!nodePos) return { x: 385, y: 28 };
+  const [nx, ny] = nodePos;
+  let ox = 32;
+  let oy = -26;
+
+  if (nx > 330) {
+    ox = -34;
+  } else if (nx < 80) {
+    ox = 34;
+  }
+
+  if (ny < 60) {
+    oy = 30;
+  } else if (ny > 220) {
+    oy = -30;
+  }
+
+  return { x: nx + ox, y: ny + oy };
+}
+
 export default function SpaceMazeAdventure({
   onAwardStars,
   onTopicComplete,
@@ -183,24 +205,29 @@ export default function SpaceMazeAdventure({
 }) {
   // Game parameters & state
   const [stationCount, setStationCount] = useState(10); // N = 5 | 7 | 10
-  const [currentStationIdx, setCurrentStationIdx] = useState(0); // Current node index (0 = Launch Base)
-  const [expectedStation, setExpectedStation] = useState(1); // Next station number to visit (1..N)
-  const [currentCountingStep, setCurrentCountingStep] = useState(1);
-  const [isCountingPhase, setIsCountingPhase] = useState(false);
-  const [isFlying, setIsFlying] = useState(false);
 
   // Dynamic jumbled layout of stations across nodes
   const [stationLayout, setStationLayout] = useState(() => generateShuffledStations(10));
   // Jumbled ordering of stars around the orbiting rocket
   const [starOrder, setStarOrder] = useState([]);
 
+  // Station 1's node index
+  const initialStartNode = (stationLayout && stationLayout.stationToNode && stationLayout.stationToNode[1]) || 1;
+  const initialStartPos = ALL_NODES[initialStartNode] || ALL_NODES[1];
+
+  const [currentStationIdx, setCurrentStationIdx] = useState(initialStartNode);
+  const [expectedStation, setExpectedStation] = useState(1); // Next station number to visit (1..N)
+  const [currentCountingStep, setCurrentCountingStep] = useState(1);
+  const [isCountingPhase, setIsCountingPhase] = useState(false);
+  const [isFlying, setIsFlying] = useState(false);
+
   // Rocket position
-  const [rocketPos, setRocketPos] = useState({ x: ALL_NODES[0][0], y: ALL_NODES[0][1] });
-  const [rocketStatus, setRocketStatus] = useState('⚡ Rocket Standby');
+  const [rocketPos, setRocketPos] = useState({ x: initialStartPos[0], y: initialStartPos[1] });
+  const [rocketStatus, setRocketStatus] = useState('⚡ Rocket Ready at Station 1 (Start)');
 
   // UI feedback banners
   const [banner, setBanner] = useState({
-    text: '👉 Find and click Station 1 on the maze to launch! 🚀',
+    text: '👉 Tap Station 1 to start countdown! 🚀',
     type: 'normal' // 'normal' | 'error' | 'success' | 'counting'
   });
   const [countGuideText, setCountGuideText] = useState('Ready for countdown!');
@@ -584,7 +611,7 @@ export default function SpaceMazeAdventure({
     setStarOrder(stars);
 
     setBanner({
-      text: `🌟 Station ${stationNum}: Count the ${stationNum} stars from 1 to ${stationNum}!`,
+      text: stationNum === 1 ? '🌟 Station 1: Count the 1 star!' : `🌟 Station ${stationNum}: Count the ${stationNum} stars from 1 to ${stationNum}!`,
       type: 'counting'
     });
     setCountGuideText('Say out loud or tap: 1');
@@ -681,24 +708,27 @@ export default function SpaceMazeAdventure({
     const layout = newLayout || generateShuffledStations(stationCount);
     setStationLayout(layout);
 
+    const startNode = (layout && layout.stationToNode && layout.stationToNode[1]) || 1;
+    const startPos = ALL_NODES[startNode] || ALL_NODES[1];
+
     setExpectedStation(1);
-    setCurrentStationIdx(0);
+    setCurrentStationIdx(startNode);
     setCurrentCountingStep(1);
     setIsCountingPhase(false);
     setIsFlying(false);
     setStarOrder([]);
 
-    setRocketPos({ x: ALL_NODES[0][0], y: ALL_NODES[0][1] });
-    setRocketStatus('⚡ Rocket on Launch Base');
+    setRocketPos({ x: startPos[0], y: startPos[1] });
+    setRocketStatus('⚡ Rocket Ready at Station 1 (Start)');
 
     setBanner({
-      text: '👉 Find and click Station 1 on the maze to launch! 🚀',
+      text: '👉 Tap Station 1 to start countdown! 🚀',
       type: 'normal'
     });
     setCountGuideText('Ready for countdown!');
     setHeardWord('Waiting to launch...');
 
-    speak('Find Station 1 to start!');
+    speak('Tap Station 1 to start!');
   }, [stopSpeechRecognition, speak, stationCount]);
 
   // Quick jumble button handler
@@ -762,6 +792,12 @@ export default function SpaceMazeAdventure({
       });
     }
   }
+
+  // Dynamic Saturn positioning at Station 10 (or Station N)
+  const saturnStationTarget = (stationLayout && stationLayout.stationToNode && stationLayout.stationToNode[10]) ? 10 : stationCount;
+  const saturnNodeId = (stationLayout && stationLayout.stationToNode && stationLayout.stationToNode[saturnStationTarget]) || stationCount;
+  const pos10 = ALL_NODES[saturnNodeId] || ALL_NODES[stationCount];
+  const saturnCoords = getSaturnCoords(pos10);
 
   return (
     <div className="tenali-space-maze-wrapper">
@@ -887,10 +923,84 @@ export default function SpaceMazeAdventure({
             <circle key={idx} cx={cx} cy={cy} r={r} fill={fill} opacity="0.65" />
           ))}
 
-          {/* Saturn Goal Planet at (385, 28) */}
-          <g transform="translate(385, 28)">
-            <ellipse cx="0" cy="0" rx="20" ry="6" fill="none" stroke="#eab308" strokeWidth="3" transform="rotate(-20)" />
-            <circle cx="0" cy="0" r="12" fill="#a855f7" />
+          {/* Dynamic Saturn Goal Planet anchored to Station 10 */}
+          <g
+            className="space-saturn-goal"
+            transform={`translate(${saturnCoords.x}, ${saturnCoords.y})`}
+            style={{ pointerEvents: 'none', filter: 'drop-shadow(0 0 8px rgba(234, 179, 8, 0.6))' }}
+          >
+            {/* Cosmic tether line linking Station 10 node to Saturn */}
+            <line
+              x1={pos10[0] - saturnCoords.x}
+              y1={pos10[1] - saturnCoords.y}
+              x2={0}
+              y2={0}
+              stroke="#eab308"
+              strokeWidth="1.5"
+              strokeDasharray="3 3"
+              opacity="0.6"
+            />
+            {/* Saturn Outer Ring */}
+            <ellipse
+              cx="0"
+              cy="0"
+              rx="22"
+              ry="7"
+              fill="none"
+              stroke="#fde047"
+              strokeWidth="3.5"
+              transform="rotate(-22)"
+              opacity="0.95"
+            />
+            {/* Saturn Inner Shadow Ring */}
+            <ellipse
+              cx="0"
+              cy="0"
+              rx="25"
+              ry="8.5"
+              fill="none"
+              stroke="rgba(234, 179, 8, 0.45)"
+              strokeWidth="1.5"
+              transform="rotate(-22)"
+            />
+            {/* Saturn Planet Body */}
+            <circle cx="0" cy="0" r="13" fill="#a855f7" />
+            {/* Planetary Atmospheric Bands */}
+            <path
+              d="M -11 -2 Q 0 -6 11 -2"
+              fill="none"
+              stroke="#c084fc"
+              strokeWidth="2"
+              opacity="0.75"
+            />
+            <path
+              d="M -12 3 Q 0 -1 12 3"
+              fill="none"
+              stroke="#7e22ce"
+              strokeWidth="2"
+              opacity="0.75"
+            />
+            {/* Ring Front Overlay for 3D Depth */}
+            <path
+              d="M -21 1 A 22 7 0 0 0 21 3"
+              fill="none"
+              stroke="#fef08a"
+              strokeWidth="2"
+              transform="rotate(-22)"
+              opacity="0.9"
+            />
+            {/* Saturn Label */}
+            <text
+              x="0"
+              y="20"
+              textAnchor="middle"
+              fontSize="8"
+              fontWeight="bold"
+              fill="#fde047"
+              letterSpacing="0.5"
+            >
+              🪐 SATURN
+            </text>
           </g>
 
           {/* Layered Tube Pathways */}
@@ -935,28 +1045,7 @@ export default function SpaceMazeAdventure({
               ))}
           </g>
 
-          {/* Launch Base Station (Node 0) */}
-          <g id="launchpad-node">
-            <circle
-              cx={ALL_NODES[0][0]}
-              cy={ALL_NODES[0][1]}
-              r="18"
-              fill="#312e81"
-              stroke="#06b6d4"
-              strokeWidth="3"
-            />
-            <text
-              x={ALL_NODES[0][0]}
-              y={ALL_NODES[0][1] + 4}
-              textAnchor="middle"
-              fontSize="10"
-              fontWeight="bold"
-              fill="#38bdf8"
-            >
-              BASE
-            </text>
-          </g>
-
+          
           {/* Circular Docking Station Nodes 1 to N with Jumbled Number Labels */}
           <g id="stations-layer">
             {Array.from({ length: stationCount }).map((_, idx) => {
@@ -969,6 +1058,8 @@ export default function SpaceMazeAdventure({
 
               const isTarget = stationNum === expectedStation;
               const isCompleted = stationNum < expectedStation;
+              const isSaturnStation = stationNum === saturnStationTarget;
+              const isStartStation = stationNum === 1;
 
               let outerStroke = '#38bdf8';
               let outerWidth = 2.5;
@@ -987,6 +1078,8 @@ export default function SpaceMazeAdventure({
                 textFill = '#1e1b4b';
               }
 
+              const badgeYOffset = pos[1] > 255 ? -26 : 26;
+
               return (
                 <g
                   key={`station-node-${nodeId}`}
@@ -994,6 +1087,22 @@ export default function SpaceMazeAdventure({
                   onClick={() => onStationClick(stationNum, nodeId)}
                   style={{ cursor: 'pointer' }}
                 >
+                  {/* Golden Saturn Orbital Ring on Station 10 Node */}
+                  {isSaturnStation && (
+                    <ellipse
+                      cx={pos[0]}
+                      cy={pos[1]}
+                      rx="25"
+                      ry="8.5"
+                      fill="none"
+                      stroke="#facc15"
+                      strokeWidth="2.5"
+                      strokeDasharray="4 2"
+                      transform={`rotate(-25 ${pos[0]} ${pos[1]})`}
+                      opacity="0.95"
+                    />
+                  )}
+
                   <circle
                     cx={pos[0]}
                     cy={pos[1]}
@@ -1020,6 +1129,58 @@ export default function SpaceMazeAdventure({
                   >
                     {isCompleted ? '✓' : stationNum}
                   </text>
+
+                  {/* START Badge below Station 1 */}
+                  {isStartStation && (
+                    <g transform={`translate(${pos[0]}, ${pos[1] + badgeYOffset})`} pointerEvents="none">
+                      <rect
+                        x="-24"
+                        y="-8"
+                        width="48"
+                        height="15"
+                        rx="7.5"
+                        fill="#059669"
+                        stroke="#34d399"
+                        strokeWidth="1.5"
+                      />
+                      <text
+                        x="0"
+                        y="3"
+                        textAnchor="middle"
+                        fontSize="8.5"
+                        fontWeight="900"
+                        fill="#ffffff"
+                      >
+                        START 🚀
+                      </text>
+                    </g>
+                  )}
+
+                  {/* GOAL Badge below Station 10 */}
+                  {isSaturnStation && (
+                    <g transform={`translate(${pos[0]}, ${pos[1] + badgeYOffset})`} pointerEvents="none">
+                      <rect
+                        x="-22"
+                        y="-8"
+                        width="44"
+                        height="15"
+                        rx="7.5"
+                        fill="#7c3aed"
+                        stroke="#c084fc"
+                        strokeWidth="1.5"
+                      />
+                      <text
+                        x="0"
+                        y="3"
+                        textAnchor="middle"
+                        fontSize="8.5"
+                        fontWeight="900"
+                        fill="#fef08a"
+                      >
+                        GOAL 🪐
+                      </text>
+                    </g>
+                  )}
                 </g>
               );
             })}
