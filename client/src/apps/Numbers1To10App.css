@@ -1950,6 +1950,12 @@
   color: #a7f3d0;
 }
 
+.voice-mic-indicator.app-count-mode {
+  background: rgba(99, 102, 241, 0.2);
+  border-color: rgba(129, 140, 248, 0.5);
+  color: #c7d2fe;
+}
+
 .voice-mic-dot {
   width: 8px;
   height: 8px;

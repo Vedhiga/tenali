@@ -155,7 +155,7 @@ export default function NumberTracingApp({
   onNavigateMaze
 }) {
   const [selectedNum, setSelectedNum] = useState(2);
-  const [stage, setStage] = useState('TRACING'); // 'TRACING' | 'COUNTING' | 'COMPLETED'
+  const [stage, setStage] = useState('TRACING'); // 'TRACING' | 'APP_COUNT' | 'KID_COUNT' | 'COMPLETED'
   
   // Tracing state
   const [currentStrokeIdx, setCurrentStrokeIdx] = useState(0);
@@ -164,8 +164,9 @@ export default function NumberTracingApp({
   const [completedStrokes, setCompletedStrokes] = useState([]);
   const [completedNumbers, setCompletedNumbers] = useState(new Set());
 
-  // Counting state
-  const [currentCountStep, setCurrentCountStep] = useState(1);
+  // Counting states
+  const [appCountStep, setAppCountStep] = useState(0);
+  const [kidCountStep, setKidCountStep] = useState(1);
   const [heardWord, setHeardWord] = useState('');
   const [micActive, setMicActive] = useState(false);
 
@@ -175,12 +176,23 @@ export default function NumberTracingApp({
   const demoTimersRef = useRef([]);
   const demoAnimRef = useRef(null);
 
-  // Refs
+  // Refs for zero-latency, closure-safe callbacks
   const svgRef = useRef(null);
   const pathRef = useRef(null);
   const audioCtxRef = useRef(null);
   const speechRecRef = useRef(null);
+  const stageRef = useRef('TRACING');
+  const kidCountStepRef = useRef(1);
   const lastMatchTimeRef = useRef(0);
+
+  // Keep refs in sync with state
+  useEffect(() => {
+    stageRef.current = stage;
+  }, [stage]);
+
+  useEffect(() => {
+    kidCountStepRef.current = kidCountStep;
+  }, [kidCountStep]);
 
   const config = TRACING_CONFIG[selectedNum] || TRACING_CONFIG[1];
   const activeStroke = config.strokes[currentStrokeIdx] || config.strokes[0];
@@ -229,7 +241,7 @@ export default function NumberTracingApp({
     });
   }, [playTone]);
 
-  // Clean, minimal speech: Only speaks the number itself
+  // Clean, minimal speech: STRICTLY only speaks the number name itself ("One", "Two", etc.)
   const speakNumber = useCallback((num) => {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
     try {
@@ -261,7 +273,7 @@ export default function NumberTracingApp({
     }
   }, [strokeProgress, activeStroke]);
 
-  // Clear demo timers
+  // Clear demo and transition timers
   const clearDemoTimers = useCallback(() => {
     demoTimersRef.current.forEach(t => clearTimeout(t));
     demoTimersRef.current = [];
@@ -276,6 +288,144 @@ export default function NumberTracingApp({
     setDemoActive(false);
     setDemoHandPos({ target: 'none', x: 0, y: 0, pressing: false, itemIdx: 0 });
   }, [clearDemoTimers]);
+
+  // Finish counting: Confetti, stars, strictly SILENT (no spoken words), advance to next number!
+  const finishCountingAndAdvance = useCallback(() => {
+    if (speechRecRef.current) {
+      try { speechRecRef.current.abort(); } catch { /* ignore */ }
+      speechRecRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setStage('COMPLETED');
+    stageRef.current = 'COMPLETED';
+    playSuccessChord();
+
+    try {
+      confetti({ particleCount: 85, spread: 75, origin: { y: 0.6 } });
+    } catch {
+      // Safe fallback
+    }
+
+    setCompletedNumbers((prev) => new Set([...prev, selectedNum]));
+
+    if (typeof onAwardStars === 'function') {
+      onAwardStars(2);
+    }
+
+    // After counting don't say anything, automatically move to next number
+    const t = setTimeout(() => {
+      if (selectedNum < 10) {
+        selectNumber(selectedNum + 1);
+      } else {
+        if (typeof markTopicCompleted === 'function') {
+          markTopicCompleted('numbers-1-to-10');
+        }
+        if (typeof onNavigateMaze === 'function') {
+          onNavigateMaze();
+        }
+      }
+    }, 1200);
+
+    demoTimersRef.current.push(t);
+  }, [selectedNum, playSuccessChord, onAwardStars, markTopicCompleted, onNavigateMaze]);
+
+  // Phase B: Kid repeats count through mic (or tap fallback)
+  const startKidCountStage = useCallback(() => {
+    setStage('KID_COUNT');
+    stageRef.current = 'KID_COUNT';
+    setKidCountStep(1);
+    kidCountStepRef.current = 1;
+    setHeardWord('');
+
+    if (typeof window === 'undefined') return;
+    const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechClass) return;
+
+    try {
+      if (speechRecRef.current) {
+        try { speechRecRef.current.abort(); } catch { /* ignore */ }
+      }
+      const r = new SpeechClass();
+      speechRecRef.current = r;
+      r.continuous = true;
+      r.interimResults = true;
+      r.maxAlternatives = 8;
+      r.lang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
+
+      r.onstart = () => setMicActive(true);
+      r.onend = () => {
+        setMicActive(false);
+        if (stageRef.current === 'KID_COUNT') {
+          try { r.start(); } catch { /* ignore */ }
+        }
+      };
+
+      r.onresult = (ev) => {
+        for (let i = ev.resultIndex; i < ev.results.length; i++) {
+          const res = ev.results[i];
+          if (!res) continue;
+          const text = res[0] ? res[0].transcript : '';
+          if (text) setHeardWord(text.trim());
+
+          for (let a = 0; a < res.length; a++) {
+            const cand = res[a] ? res[a].transcript : '';
+            const target = kidCountStepRef.current;
+            if (checkTargetSpoken(cand, target)) {
+              const now = Date.now();
+              if (now - lastMatchTimeRef.current > 260) {
+                lastMatchTimeRef.current = now;
+                playChime(target);
+
+                if (target < selectedNum) {
+                  kidCountStepRef.current = target + 1;
+                  setKidCountStep(target + 1);
+                } else {
+                  finishCountingAndAdvance();
+                }
+                break;
+              }
+            }
+          }
+        }
+      };
+
+      r.start();
+    } catch {
+      // Speech recognition fallback
+    }
+  }, [selectedNum, playChime, finishCountingAndAdvance]);
+
+  // Phase A: App counts first (1, 2, ... N) aloud with chimes & sequential glow
+  const startAppCountStage = useCallback(() => {
+    setStage('APP_COUNT');
+    stageRef.current = 'APP_COUNT';
+    setAppCountStep(1);
+    playChime(1);
+    speakNumber(1);
+
+    let current = 1;
+    const scheduleNext = () => {
+      if (current < selectedNum) {
+        current++;
+        setAppCountStep(current);
+        playChime(current);
+        speakNumber(current);
+        const t = setTimeout(scheduleNext, 750);
+        demoTimersRef.current.push(t);
+      } else {
+        // App finished counting! Hand over to kid through mic
+        const t = setTimeout(() => {
+          startKidCountStage();
+        }, 850);
+        demoTimersRef.current.push(t);
+      }
+    };
+
+    const tFirst = setTimeout(scheduleNext, 750);
+    demoTimersRef.current.push(tFirst);
+  }, [selectedNum, playChime, speakNumber, startKidCountStage]);
 
   // User Pointer Dragging along Path
   const handlePointerDown = (e) => {
@@ -328,10 +478,11 @@ export default function NumberTracingApp({
 
         if (newCompleted.length >= config.strokes.length) {
           playSuccessChord();
-          // Move directly to counting stage without talking
-          setTimeout(() => {
-            startCountingStage();
-          }, 400);
+          // First the app counts 1, 2, ... N
+          const t = setTimeout(() => {
+            startAppCountStage();
+          }, 450);
+          demoTimersRef.current.push(t);
         } else {
           // Advance to next stroke (e.g. stroke 2 in number 4)
           const nextIdx = currentStrokeIdx + 1;
@@ -351,126 +502,22 @@ export default function NumberTracingApp({
     }
   };
 
-  // Start Counting Stage (voice or tap)
-  const startCountingStage = useCallback(() => {
-    setStage('COUNTING');
-    setCurrentCountStep(1);
-    setHeardWord('');
-
-    if (typeof window === 'undefined') return;
-    const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechClass) return;
-
-    try {
-      if (speechRecRef.current) {
-        try { speechRecRef.current.abort(); } catch { /* ignore */ }
-      }
-      const r = new SpeechClass();
-      speechRecRef.current = r;
-      r.continuous = true;
-      r.interimResults = true;
-      r.maxAlternatives = 8;
-      r.lang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
-
-      r.onstart = () => setMicActive(true);
-      r.onend = () => {
-        setMicActive(false);
-        if (stage === 'COUNTING') {
-          try { r.start(); } catch { /* ignore */ }
-        }
-      };
-
-      r.onresult = (ev) => {
-        for (let i = ev.resultIndex; i < ev.results.length; i++) {
-          const res = ev.results[i];
-          if (!res) continue;
-          const text = res[0] ? res[0].transcript : '';
-          if (text) setHeardWord(text.trim());
-
-          for (let a = 0; a < res.length; a++) {
-            const cand = res[a] ? res[a].transcript : '';
-            setCurrentCountStep((currStep) => {
-              if (checkTargetSpoken(cand, currStep)) {
-                const now = Date.now();
-                if (now - lastMatchTimeRef.current > 280) {
-                  lastMatchTimeRef.current = now;
-                  playChime(currStep);
-                  speakNumber(currStep);
-
-                  if (currStep < selectedNum) {
-                    return currStep + 1;
-                  } else {
-                    finishCountingAndAdvance();
-                    return currStep;
-                  }
-                }
-              }
-              return currStep;
-            });
-          }
-        }
-      };
-
-      r.start();
-    } catch {
-      // Speech recognition fallback
-    }
-  }, [selectedNum, stage, playChime, speakNumber]);
-
-  // Object Tap Handler
+  // Object Tap Handler (works as fallback or accompaniment to mic)
   const handleObjectTap = (itemIdx) => {
     if (demoActive) stopDemo();
     getAudioCtx();
-    if (stage === 'COUNTING') {
-      if (itemIdx === currentCountStep) {
+    if (stage === 'KID_COUNT') {
+      const target = kidCountStepRef.current;
+      if (itemIdx === target) {
         playChime(itemIdx);
-        speakNumber(itemIdx);
-
         if (itemIdx < selectedNum) {
-          setCurrentCountStep(itemIdx + 1);
+          kidCountStepRef.current = itemIdx + 1;
+          setKidCountStep(itemIdx + 1);
         } else {
           finishCountingAndAdvance();
         }
       }
     }
-  };
-
-  // Finish counting: Confetti, stars, don't say anything, move to next number!
-  const finishCountingAndAdvance = () => {
-    if (speechRecRef.current) {
-      try { speechRecRef.current.abort(); } catch { /* ignore */ }
-      speechRecRef.current = null;
-    }
-    setStage('COMPLETED');
-    playSuccessChord();
-
-    try {
-      confetti({ particleCount: 85, spread: 75, origin: { y: 0.6 } });
-    } catch {
-      // Safe fallback
-    }
-
-    setCompletedNumbers((prev) => new Set([...prev, selectedNum]));
-
-    if (typeof onAwardStars === 'function') {
-      onAwardStars(2);
-    }
-
-    // After counting don't say anything, automatically move to next number
-    const t = setTimeout(() => {
-      if (selectedNum < 10) {
-        selectNumber(selectedNum + 1);
-      } else {
-        if (typeof markTopicCompleted === 'function') {
-          markTopicCompleted('numbers-1-to-10');
-        }
-        if (typeof onNavigateMaze === 'function') {
-          onNavigateMaze();
-        }
-      }
-    }, 1200);
-
-    demoTimersRef.current.push(t);
   };
 
   // Switch/Reset Number
@@ -480,20 +527,27 @@ export default function NumberTracingApp({
       try { speechRecRef.current.abort(); } catch { /* ignore */ }
       speechRecRef.current = null;
     }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
     setSelectedNum(n);
     setStage('TRACING');
+    stageRef.current = 'TRACING';
     setCurrentStrokeIdx(0);
     setStrokeProgress(0);
     setCompletedStrokes([]);
-    setCurrentCountStep(1);
+    setAppCountStep(0);
+    setKidCountStep(1);
+    kidCountStepRef.current = 1;
     setHeardWord('');
   };
 
-  // Animated Playable Demo: Shows how to trace and count
+  // Animated Playable Demo: Demonstrates how to trace and count
   const startDemo = useCallback(() => {
     clearDemoTimers();
     setDemoActive(true);
     setStage('TRACING');
+    stageRef.current = 'TRACING';
     setCurrentStrokeIdx(0);
     setStrokeProgress(0);
     setCompletedStrokes([]);
@@ -586,11 +640,12 @@ export default function NumberTracingApp({
 
     demoTimersRef.current.push(t1);
 
-    // Sub-routine: Count objects demo
+    // Sub-routine: Count objects demo (Hand points as number is spoken)
     const startCountingDemo = () => {
       const tCountStart = setTimeout(() => {
-        setStage('COUNTING');
-        setCurrentCountStep(1);
+        setStage('APP_COUNT');
+        stageRef.current = 'APP_COUNT';
+        setAppCountStep(0);
 
         let c = 1;
         const totalItems = selectedNum;
@@ -598,9 +653,9 @@ export default function NumberTracingApp({
         const countNextItem = () => {
           if (c <= totalItems) {
             setDemoHandPos({ target: 'item', x: 0, y: 0, pressing: true, itemIdx: c });
+            setAppCountStep(c);
             playChime(c);
             speakNumber(c);
-            setCurrentCountStep(c + 1);
 
             const tItemRelease = setTimeout(() => {
               setDemoHandPos(prev => ({ ...prev, pressing: false }));
@@ -615,10 +670,12 @@ export default function NumberTracingApp({
             const tFinish = setTimeout(() => {
               stopDemo();
               setStage('TRACING');
+              stageRef.current = 'TRACING';
               setCurrentStrokeIdx(0);
               setStrokeProgress(0);
               setCompletedStrokes([]);
-              setCurrentCountStep(1);
+              setAppCountStep(0);
+              setKidCountStep(1);
             }, 800);
             demoTimersRef.current.push(tFinish);
           }
@@ -685,7 +742,11 @@ export default function NumberTracingApp({
             <span className="stroke-progress-indicator">
               {stage === 'TRACING'
                 ? `Stroke ${currentStrokeIdx + 1} of ${config.strokes.length}`
-                : '✓ Traced!'}
+                : stage === 'APP_COUNT'
+                ? '🔊 Listen & Watch'
+                : stage === 'KID_COUNT'
+                ? '🎤 Your Turn to Count!'
+                : '✓ Great Job!'}
             </span>
           </div>
 
@@ -844,10 +905,16 @@ export default function NumberTracingApp({
         <div className="trace-counter-panel">
           <div className="counter-panel-header">
             <h3>{selectedNum} {config.objectName}s</h3>
-            {stage === 'COUNTING' && (
-              <div className="voice-mic-indicator">
+            {stage === 'APP_COUNT' && (
+              <div className="voice-mic-indicator app-count-mode">
+                <span className="voice-mic-dot active" />
+                <span>🔊 Counting {appCountStep} / {selectedNum}</span>
+              </div>
+            )}
+            {stage === 'KID_COUNT' && (
+              <div className="voice-mic-indicator kid-count-mode">
                 <span className={`voice-mic-dot ${micActive ? 'active' : ''}`} />
-                <span>{heardWord ? `"${heardWord}"` : 'Mic Active'}</span>
+                <span>{heardWord ? `"${heardWord}"` : `🎤 Say ${kidCountStep}`}</span>
               </div>
             )}
           </div>
@@ -856,15 +923,25 @@ export default function NumberTracingApp({
           <div className="trace-objects-grid">
             {Array.from({ length: selectedNum }).map((_, idx) => {
               const itemNum = idx + 1;
-              const isLit = (stage === 'COUNTING' && itemNum < currentCountStep) || stage === 'COMPLETED';
-              const isTarget = stage === 'COUNTING' && itemNum === currentCountStep;
+              let isLit = false;
+              let isTarget = false;
+
+              if (stage === 'APP_COUNT') {
+                isLit = itemNum <= appCountStep;
+                isTarget = itemNum === appCountStep;
+              } else if (stage === 'KID_COUNT') {
+                isLit = itemNum < kidCountStep;
+                isTarget = itemNum === kidCountStep;
+              } else if (stage === 'COMPLETED') {
+                isLit = true;
+              }
 
               return (
                 <div
                   key={`obj-${itemNum}`}
                   className={`trace-item-bubble ${isLit ? 'is-lit' : ''} ${isTarget ? 'is-target' : ''}`}
                   onClick={() => handleObjectTap(itemNum)}
-                  style={{ cursor: stage === 'COUNTING' ? 'pointer' : 'default', position: 'relative' }}
+                  style={{ cursor: stage === 'KID_COUNT' ? 'pointer' : 'default', position: 'relative' }}
                 >
                   <span className="object-emoji-render">{config.objectEmoji}</span>
                   <span className="object-num-tag">{itemNum}</span>
