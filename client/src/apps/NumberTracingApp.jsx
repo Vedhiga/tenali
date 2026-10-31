@@ -143,10 +143,20 @@ const NUMBER_PATTERNS = {
   10: /\b(10|ten|tan|tin|den|tenth|das|dus|pathu|patthu|diez)\b/i
 };
 
-function checkTargetSpoken(text, targetNum) {
-  if (!text || !NUMBER_PATTERNS[targetNum]) return false;
+function detectSpokenNumber(text, expectedTarget) {
+  if (!text) return null;
   const clean = text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
-  return NUMBER_PATTERNS[targetNum].test(clean);
+  // Check expected target first
+  if (expectedTarget && NUMBER_PATTERNS[expectedTarget] && NUMBER_PATTERNS[expectedTarget].test(clean)) {
+    return expectedTarget;
+  }
+  // Check any other number 1..10
+  for (let n = 1; n <= 10; n++) {
+    if (n !== expectedTarget && NUMBER_PATTERNS[n] && NUMBER_PATTERNS[n].test(clean)) {
+      return n;
+    }
+  }
+  return null;
 }
 
 export default function NumberTracingApp({
@@ -154,8 +164,8 @@ export default function NumberTracingApp({
   markTopicCompleted,
   onNavigateMaze
 }) {
-  const [selectedNum, setSelectedNum] = useState(2);
-  const [stage, setStage] = useState('TRACING'); // 'TRACING' | 'APP_COUNT' | 'KID_COUNT' | 'COMPLETED'
+  const [selectedNum, setSelectedNum] = useState(1);
+  const [stage, setStage] = useState('TRACING'); // 'TRACING' | 'ECHO_COUNT' | 'SOLO_COUNT' | 'COMPLETED'
   
   // Tracing state
   const [currentStrokeIdx, setCurrentStrokeIdx] = useState(0);
@@ -164,9 +174,14 @@ export default function NumberTracingApp({
   const [completedStrokes, setCompletedStrokes] = useState([]);
   const [completedNumbers, setCompletedNumbers] = useState(new Set());
 
-  // Counting states
-  const [appCountStep, setAppCountStep] = useState(0);
-  const [kidCountStep, setKidCountStep] = useState(1);
+  // Echo Counting state (Call & Response: voice says 1, child repeats 1, then 2, etc.)
+  const [echoStep, setEchoStep] = useState(1);
+  const [echoSubState, setEchoSubState] = useState('ANNOUNCING_NUM'); // 'ANNOUNCING_NUM' | 'APP_SPEAKING' | 'WAITING_KID'
+
+  // Solo Counting state (Child counts on their own 1..N; restarts on wrong count)
+  const [soloCountStep, setSoloCountStep] = useState(1);
+  const [wrongAttemptFlash, setWrongAttemptFlash] = useState(false);
+
   const [heardWord, setHeardWord] = useState('');
   const [micActive, setMicActive] = useState(false);
 
@@ -182,7 +197,9 @@ export default function NumberTracingApp({
   const audioCtxRef = useRef(null);
   const speechRecRef = useRef(null);
   const stageRef = useRef('TRACING');
-  const kidCountStepRef = useRef(1);
+  const echoStepRef = useRef(1);
+  const echoSubStateRef = useRef('ANNOUNCING_NUM');
+  const soloCountStepRef = useRef(1);
   const lastMatchTimeRef = useRef(0);
 
   // Keep refs in sync with state
@@ -191,8 +208,16 @@ export default function NumberTracingApp({
   }, [stage]);
 
   useEffect(() => {
-    kidCountStepRef.current = kidCountStep;
-  }, [kidCountStep]);
+    echoStepRef.current = echoStep;
+  }, [echoStep]);
+
+  useEffect(() => {
+    echoSubStateRef.current = echoSubState;
+  }, [echoSubState]);
+
+  useEffect(() => {
+    soloCountStepRef.current = soloCountStep;
+  }, [soloCountStep]);
 
   const config = TRACING_CONFIG[selectedNum] || TRACING_CONFIG[1];
   const activeStroke = config.strokes[currentStrokeIdx] || config.strokes[0];
@@ -234,6 +259,26 @@ export default function NumberTracingApp({
     playTone(f, 'triangle', 0.28, 0.25);
     setTimeout(() => playTone(f * 1.5, 'sine', 0.2, 0.12), 40);
   }, [playTone]);
+
+  const playWrongTone = useCallback(() => {
+    try {
+      const ctx = getAudioCtx();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(280, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(170, ctx.currentTime + 0.28);
+      gain.gain.setValueAtTime(0.18, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.28);
+    } catch {
+      // Audio fallback
+    }
+  }, [getAudioCtx]);
 
   const playSuccessChord = useCallback(() => {
     [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
@@ -289,6 +334,33 @@ export default function NumberTracingApp({
     setDemoHandPos({ target: 'none', x: 0, y: 0, pressing: false, itemIdx: 0 });
   }, [clearDemoTimers]);
 
+  // Switch/Reset Number
+  const selectNumber = useCallback((n) => {
+    clearDemoTimers();
+    if (speechRecRef.current) {
+      try { speechRecRef.current.abort(); } catch { /* ignore */ }
+      speechRecRef.current = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setSelectedNum(n);
+    setStage('TRACING');
+    stageRef.current = 'TRACING';
+    setCurrentStrokeIdx(0);
+    setStrokeProgress(0);
+    setCompletedStrokes([]);
+    setEchoStep(1);
+    echoStepRef.current = 1;
+    setEchoSubState('ANNOUNCING_NUM');
+    echoSubStateRef.current = 'ANNOUNCING_NUM';
+    setSoloCountStep(1);
+    soloCountStepRef.current = 1;
+    setWrongAttemptFlash(false);
+    setHeardWord('');
+    speakNumber(n);
+  }, [clearDemoTimers, speakNumber]);
+
   // Finish counting: Confetti, stars, strictly SILENT (no spoken words), advance to next number!
   const finishCountingAndAdvance = useCallback(() => {
     if (speechRecRef.current) {
@@ -329,122 +401,179 @@ export default function NumberTracingApp({
     }, 1200);
 
     demoTimersRef.current.push(t);
-  }, [selectedNum, playSuccessChord, onAwardStars, markTopicCompleted, onNavigateMaze]);
+  }, [selectedNum, playSuccessChord, onAwardStars, markTopicCompleted, onNavigateMaze, selectNumber]);
 
-  // Phase B: Kid repeats count through mic (or tap fallback)
-  const startKidCountStage = useCallback(() => {
-    setStage('KID_COUNT');
-    stageRef.current = 'KID_COUNT';
-    setKidCountStep(1);
-    kidCountStepRef.current = 1;
+  // Handle Solo Counting Attempt (Child counts on their own 1..N; restart on wrong count)
+  const handleSoloCountAttempt = useCallback((spokenNum) => {
+    const target = soloCountStepRef.current;
+    if (spokenNum === target) {
+      // Correct number in solo sequence!
+      playChime(target);
+      if (target < selectedNum) {
+        const nextTarget = target + 1;
+        soloCountStepRef.current = nextTarget;
+        setSoloCountStep(nextTarget);
+      } else {
+        // Child completed counting the number on their own!
+        finishCountingAndAdvance();
+      }
+    } else {
+      // Counted wrong! Restart counting for this number alone
+      playWrongTone();
+      soloCountStepRef.current = 1;
+      setSoloCountStep(1);
+      setWrongAttemptFlash(true);
+      const tFlash = setTimeout(() => setWrongAttemptFlash(false), 900);
+      demoTimersRef.current.push(tFlash);
+    }
+  }, [selectedNum, playChime, playWrongTone, finishCountingAndAdvance]);
+
+  // Transition to Solo Count Stage (Child counts on their own)
+  const startSoloCountStage = useCallback(() => {
+    setStage('SOLO_COUNT');
+    stageRef.current = 'SOLO_COUNT';
+    setSoloCountStep(1);
+    soloCountStepRef.current = 1;
+    setWrongAttemptFlash(false);
     setHeardWord('');
+    lastMatchTimeRef.current = Date.now();
+  }, []);
 
+  // Trigger one step in Echo Count (voice speaks, then waits for child repeat)
+  const triggerEchoStep = useCallback((step) => {
+    setEchoStep(step);
+    echoStepRef.current = step;
+    setEchoSubState('APP_SPEAKING');
+    echoSubStateRef.current = 'APP_SPEAKING';
+
+    speakNumber(step);
+    playTone(523.25, 'triangle', 0.18, 0.2);
+
+    const tWait = setTimeout(() => {
+      setEchoSubState('WAITING_KID');
+      echoSubStateRef.current = 'WAITING_KID';
+      lastMatchTimeRef.current = Date.now();
+    }, 650);
+
+    demoTimersRef.current.push(tWait);
+  }, [speakNumber, playTone]);
+
+  // When child repeats the step in Echo Count
+  const onChildEchoed = useCallback((spokenNum) => {
+    const currentStep = echoStepRef.current;
+    if (spokenNum !== currentStep) return;
+
+    playChime(currentStep);
+
+    if (currentStep < selectedNum) {
+      const nextStep = currentStep + 1;
+      setEchoStep(nextStep);
+      echoStepRef.current = nextStep;
+      const tNext = setTimeout(() => {
+        triggerEchoStep(nextStep);
+      }, 700);
+      demoTimersRef.current.push(tNext);
+    } else {
+      // Child successfully repeated all numbers! Now count on their own
+      const tSolo = setTimeout(() => {
+        startSoloCountStage();
+      }, 900);
+      demoTimersRef.current.push(tSolo);
+    }
+  }, [selectedNum, playChime, triggerEchoStep, startSoloCountStage]);
+
+  // Ensure speech recognition is active and processing callbacks
+  const ensureSpeechActive = useCallback(() => {
     if (typeof window === 'undefined') return;
     const SpeechClass = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechClass) return;
 
     try {
-      if (speechRecRef.current) {
-        try { speechRecRef.current.abort(); } catch { /* ignore */ }
-      }
-      const r = new SpeechClass();
-      speechRecRef.current = r;
-      r.continuous = true;
-      r.interimResults = true;
-      r.maxAlternatives = 8;
-      r.lang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
+      if (!speechRecRef.current) {
+        const r = new SpeechClass();
+        speechRecRef.current = r;
+        r.continuous = true;
+        r.interimResults = true;
+        r.maxAlternatives = 8;
+        r.lang = (typeof navigator !== 'undefined' && navigator.language) ? navigator.language : 'en-US';
 
-      r.onstart = () => setMicActive(true);
-      r.onend = () => {
-        setMicActive(false);
-        if (stageRef.current === 'KID_COUNT') {
-          try { r.start(); } catch { /* ignore */ }
-        }
-      };
+        r.onstart = () => setMicActive(true);
+        r.onend = () => {
+          setMicActive(false);
+          if (stageRef.current === 'ECHO_COUNT' || stageRef.current === 'SOLO_COUNT') {
+            try { r.start(); } catch { /* ignore */ }
+          }
+        };
+        r.onerror = () => { /* ignore */ };
 
-      r.onresult = (ev) => {
-        for (let i = ev.resultIndex; i < ev.results.length; i++) {
-          const res = ev.results[i];
-          if (!res) continue;
-          const text = res[0] ? res[0].transcript : '';
-          if (text) setHeardWord(text.trim());
+        r.onresult = (ev) => {
+          for (let i = ev.resultIndex; i < ev.results.length; i++) {
+            const res = ev.results[i];
+            if (!res) continue;
+            const text = res[0] ? res[0].transcript : '';
+            if (text) setHeardWord(text.trim());
 
-          for (let a = 0; a < res.length; a++) {
-            const cand = res[a] ? res[a].transcript : '';
-            const target = kidCountStepRef.current;
-            if (checkTargetSpoken(cand, target)) {
+            for (let a = 0; a < res.length; a++) {
+              const cand = res[a] ? res[a].transcript : '';
               const now = Date.now();
-              if (now - lastMatchTimeRef.current > 260) {
-                lastMatchTimeRef.current = now;
-                playChime(target);
+              if (now - lastMatchTimeRef.current < 280) continue;
 
-                if (target < selectedNum) {
-                  kidCountStepRef.current = target + 1;
-                  setKidCountStep(target + 1);
-                } else {
-                  finishCountingAndAdvance();
+              if (stageRef.current === 'ECHO_COUNT') {
+                if (echoSubStateRef.current === 'WAITING_KID') {
+                  const expected = echoStepRef.current;
+                  const spoken = detectSpokenNumber(cand, expected);
+                  if (spoken === expected) {
+                    lastMatchTimeRef.current = now;
+                    echoSubStateRef.current = 'APP_SPEAKING';
+                    onChildEchoed(spoken);
+                    break;
+                  }
                 }
-                break;
+              } else if (stageRef.current === 'SOLO_COUNT') {
+                const expected = soloCountStepRef.current;
+                const spoken = detectSpokenNumber(cand, expected);
+                if (spoken !== null) {
+                  lastMatchTimeRef.current = now;
+                  handleSoloCountAttempt(spoken);
+                  break;
+                }
               }
             }
           }
-        }
-      };
+        };
 
-      r.start();
+        r.start();
+      } else {
+        try { speechRecRef.current.start(); } catch { /* ignore */ }
+      }
     } catch {
       // Speech recognition fallback
     }
-  }, [selectedNum, playChime, finishCountingAndAdvance]);
+  }, [onChildEchoed, handleSoloCountAttempt]);
 
-  // Phase A: App counts first: First say the number (e.g. 4), and then count 1, 2, 3, 4
-  const startAppCountStage = useCallback(() => {
-    setStage('APP_COUNT');
-    stageRef.current = 'APP_COUNT';
-    setAppCountStep(0);
+  // Phase A: Echo Count (First say number e.g. 4, then voice says 1 child repeats 1, then 2...)
+  const startEchoCountStage = useCallback(() => {
+    setStage('ECHO_COUNT');
+    stageRef.current = 'ECHO_COUNT';
+    setEchoStep(1);
+    echoStepRef.current = 1;
+    setEchoSubState('ANNOUNCING_NUM');
+    echoSubStateRef.current = 'ANNOUNCING_NUM';
+    setHeardWord('');
 
-    // Step 0: First say the target number (e.g. "Four")
+    ensureSpeechActive();
+
+    // Step 0: First say the target number itself (e.g. "Four")
     speakNumber(selectedNum);
     playTone(440, 'triangle', 0.25, 0.2);
 
-    // Then start counting 1, 2, ... N after a clear pause
-    const tStartCount = setTimeout(() => {
-      let current = 1;
-      setAppCountStep(1);
-      playChime(1);
-      speakNumber(1);
-
-      const scheduleNext = () => {
-        if (current < selectedNum) {
-          current++;
-          setAppCountStep(current);
-          playChime(current);
-          speakNumber(current);
-          const t = setTimeout(scheduleNext, 750);
-          demoTimersRef.current.push(t);
-        } else {
-          // App finished counting! Hand over to kid through mic
-          const t = setTimeout(() => {
-            startKidCountStage();
-          }, 850);
-          demoTimersRef.current.push(t);
-        }
-      };
-
-      if (selectedNum > 1) {
-        const tNext = setTimeout(scheduleNext, 750);
-        demoTimersRef.current.push(tNext);
-      } else {
-        // If selectedNum is 1, app has counted 1, now transition to kid
-        const tDone = setTimeout(() => {
-          startKidCountStage();
-        }, 850);
-        demoTimersRef.current.push(tDone);
-      }
+    // After 900ms, start step 1 of call & response
+    const tStartEcho = setTimeout(() => {
+      triggerEchoStep(1);
     }, 900);
 
-    demoTimersRef.current.push(tStartCount);
-  }, [selectedNum, playTone, playChime, speakNumber, startKidCountStage]);
+    demoTimersRef.current.push(tStartEcho);
+  }, [selectedNum, speakNumber, playTone, ensureSpeechActive, triggerEchoStep]);
 
   // User Pointer Dragging along Path
   const handlePointerDown = (e) => {
@@ -497,9 +626,9 @@ export default function NumberTracingApp({
 
         if (newCompleted.length >= config.strokes.length) {
           playSuccessChord();
-          // First the app counts 1, 2, ... N
+          // Move to Echo Count Stage (voice says 1, child repeats 1, then 2...)
           const t = setTimeout(() => {
-            startAppCountStage();
+            startEchoCountStage();
           }, 450);
           demoTimersRef.current.push(t);
         } else {
@@ -525,41 +654,14 @@ export default function NumberTracingApp({
   const handleObjectTap = (itemIdx) => {
     if (demoActive) stopDemo();
     getAudioCtx();
-    if (stage === 'KID_COUNT') {
-      const target = kidCountStepRef.current;
-      if (itemIdx === target) {
-        playChime(itemIdx);
-        if (itemIdx < selectedNum) {
-          kidCountStepRef.current = itemIdx + 1;
-          setKidCountStep(itemIdx + 1);
-        } else {
-          finishCountingAndAdvance();
-        }
+    if (stage === 'ECHO_COUNT') {
+      if (echoSubStateRef.current === 'WAITING_KID' && itemIdx === echoStepRef.current) {
+        echoSubStateRef.current = 'APP_SPEAKING';
+        onChildEchoed(itemIdx);
       }
+    } else if (stage === 'SOLO_COUNT') {
+      handleSoloCountAttempt(itemIdx);
     }
-  };
-
-  // Switch/Reset Number
-  const selectNumber = (n) => {
-    clearDemoTimers();
-    if (speechRecRef.current) {
-      try { speechRecRef.current.abort(); } catch { /* ignore */ }
-      speechRecRef.current = null;
-    }
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    setSelectedNum(n);
-    setStage('TRACING');
-    stageRef.current = 'TRACING';
-    setCurrentStrokeIdx(0);
-    setStrokeProgress(0);
-    setCompletedStrokes([]);
-    setAppCountStep(0);
-    setKidCountStep(1);
-    kidCountStepRef.current = 1;
-    setHeardWord('');
-    speakNumber(n);
   };
 
   // Animated Playable Demo: Demonstrates how to trace and count
@@ -660,12 +762,15 @@ export default function NumberTracingApp({
 
     demoTimersRef.current.push(t1);
 
-    // Sub-routine: Count objects demo: First say the number (e.g. 4), and then count 1, 2, 3, 4
+    // Sub-routine: Count objects demo (demonstrates repeat & count)
     const startCountingDemo = () => {
       const tCountStart = setTimeout(() => {
-        setStage('APP_COUNT');
-        stageRef.current = 'APP_COUNT';
-        setAppCountStep(0);
+        setStage('ECHO_COUNT');
+        stageRef.current = 'ECHO_COUNT';
+        setEchoStep(1);
+        echoStepRef.current = 1;
+        setEchoSubState('ANNOUNCING_NUM');
+        echoSubStateRef.current = 'ANNOUNCING_NUM';
 
         // Step 0: First say the target number itself
         speakNumber(selectedNum);
@@ -677,30 +782,34 @@ export default function NumberTracingApp({
 
           const countNextItem = () => {
             if (c <= totalItems) {
-              setDemoHandPos({ target: 'item', x: 0, y: 0, pressing: true, itemIdx: c });
-              setAppCountStep(c);
-              playChime(c);
+              setEchoStep(c);
+              echoStepRef.current = c;
+              setEchoSubState('APP_SPEAKING');
+              echoSubStateRef.current = 'APP_SPEAKING';
               speakNumber(c);
 
-              const tItemRelease = setTimeout(() => {
-                setDemoHandPos(prev => ({ ...prev, pressing: false }));
-                c++;
-                const tNextDelay = setTimeout(countNextItem, 400);
-                demoTimersRef.current.push(tNextDelay);
-              }, 350);
+              const tHandTap = setTimeout(() => {
+                setEchoSubState('WAITING_KID');
+                echoSubStateRef.current = 'WAITING_KID';
+                setDemoHandPos({ target: 'item', x: 0, y: 0, pressing: true, itemIdx: c });
+                playChime(c);
 
-              demoTimersRef.current.push(tItemRelease);
+                const tItemRelease = setTimeout(() => {
+                  setDemoHandPos(prev => ({ ...prev, pressing: false }));
+                  c++;
+                  const tNextDelay = setTimeout(countNextItem, 450);
+                  demoTimersRef.current.push(tNextDelay);
+                }, 350);
+
+                demoTimersRef.current.push(tItemRelease);
+              }, 400);
+
+              demoTimersRef.current.push(tHandTap);
             } else {
               // Demo finished! Reset to interactive play mode
               const tFinish = setTimeout(() => {
                 stopDemo();
-                setStage('TRACING');
-                stageRef.current = 'TRACING';
-                setCurrentStrokeIdx(0);
-                setStrokeProgress(0);
-                setCompletedStrokes([]);
-                setAppCountStep(0);
-                setKidCountStep(1);
+                selectNumber(selectedNum);
               }, 800);
               demoTimersRef.current.push(tFinish);
             }
@@ -766,16 +875,16 @@ export default function NumberTracingApp({
         {/* Left Column: Hollow Cartoon Numeral & Guided Tracing Track */}
         <div className="trace-canvas-panel">
           <div className="trace-panel-header">
-            <span className={`number-name-badge ${stage === 'APP_COUNT' && appCountStep === 0 ? 'is-speaking' : ''}`}>
+            <span className={`number-name-badge ${stage === 'ECHO_COUNT' && echoSubState === 'ANNOUNCING_NUM' ? 'is-speaking' : ''}`}>
               Number {selectedNum}
             </span>
             <span className="stroke-progress-indicator">
               {stage === 'TRACING'
                 ? `Stroke ${currentStrokeIdx + 1} of ${config.strokes.length}`
-                : stage === 'APP_COUNT'
-                ? (appCountStep === 0 ? `🔊 Number ${selectedNum}` : '🔊 Listen & Watch')
-                : stage === 'KID_COUNT'
-                ? '🎤 Your Turn to Count!'
+                : stage === 'ECHO_COUNT'
+                ? '🗣️ Repeat after me'
+                : stage === 'SOLO_COUNT'
+                ? '🌟 Count on your own!'
                 : '✓ Great Job!'}
             </span>
           </div>
@@ -935,37 +1044,45 @@ export default function NumberTracingApp({
         <div className="trace-counter-panel">
           <div className="counter-panel-header">
             <h3>{selectedNum} {config.objectName}s</h3>
-            {stage === 'APP_COUNT' && (
+            {stage === 'ECHO_COUNT' && (
               <div className="voice-mic-indicator app-count-mode">
                 <span className="voice-mic-dot active" />
                 <span>
-                  {appCountStep === 0
+                  {echoSubState === 'ANNOUNCING_NUM'
                     ? `🔊 Number ${selectedNum}`
-                    : `🔊 Counting ${appCountStep} / ${selectedNum}`}
+                    : echoSubState === 'APP_SPEAKING'
+                    ? `🔊 Listen: "${NUMBER_WORDS[echoStep]}"`
+                    : `🎤 Repeat: "${NUMBER_WORDS[echoStep]}"`}
                 </span>
               </div>
             )}
-            {stage === 'KID_COUNT' && (
-              <div className="voice-mic-indicator kid-count-mode">
+            {stage === 'SOLO_COUNT' && (
+              <div className={`voice-mic-indicator ${wrongAttemptFlash ? 'wrong-count-mode' : 'kid-count-mode'}`}>
                 <span className={`voice-mic-dot ${micActive ? 'active' : ''}`} />
-                <span>{heardWord ? `"${heardWord}"` : `🎤 Say ${kidCountStep}`}</span>
+                <span>
+                  {wrongAttemptFlash
+                    ? `🔄 Try again from 1`
+                    : heardWord
+                    ? `"${heardWord}"`
+                    : `🎤 Count on your own: ${soloCountStep} / ${selectedNum}`}
+                </span>
               </div>
             )}
           </div>
 
           {/* Concrete Objects Display (e.g. 4 Apples) */}
-          <div className="trace-objects-grid">
+          <div className={`trace-objects-grid ${wrongAttemptFlash ? 'is-wrong' : ''}`}>
             {Array.from({ length: selectedNum }).map((_, idx) => {
               const itemNum = idx + 1;
               let isLit = false;
               let isTarget = false;
 
-              if (stage === 'APP_COUNT') {
-                isLit = itemNum <= appCountStep;
-                isTarget = itemNum === appCountStep;
-              } else if (stage === 'KID_COUNT') {
-                isLit = itemNum < kidCountStep;
-                isTarget = itemNum === kidCountStep;
+              if (stage === 'ECHO_COUNT') {
+                isLit = itemNum < echoStep;
+                isTarget = itemNum === echoStep;
+              } else if (stage === 'SOLO_COUNT') {
+                isLit = itemNum < soloCountStep;
+                isTarget = itemNum === soloCountStep;
               } else if (stage === 'COMPLETED') {
                 isLit = true;
               }
@@ -975,7 +1092,10 @@ export default function NumberTracingApp({
                   key={`obj-${itemNum}`}
                   className={`trace-item-bubble ${isLit ? 'is-lit' : ''} ${isTarget ? 'is-target' : ''}`}
                   onClick={() => handleObjectTap(itemNum)}
-                  style={{ cursor: stage === 'KID_COUNT' ? 'pointer' : 'default', position: 'relative' }}
+                  style={{
+                    cursor: (stage === 'ECHO_COUNT' || stage === 'SOLO_COUNT') ? 'pointer' : 'default',
+                    position: 'relative'
+                  }}
                 >
                   <span className="object-emoji-render">{config.objectEmoji}</span>
                   <span className="object-num-tag">{itemNum}</span>
