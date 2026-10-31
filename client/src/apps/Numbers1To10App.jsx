@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import confetti from 'canvas-confetti';
+import SpaceMazeAdventure from './SpaceMazeAdventure.jsx';
 import './Numbers1To10App.css';
 
 const NUMBER_WORDS = {
@@ -61,6 +62,7 @@ export default function Numbers1To10App({
   markTopicCompleted,
   updateCoins
 }) {
+  const [activeTab, setActiveTab] = useState('hopscotch'); // 'hopscotch' | 'maze'
   const [starCount, setStarCount] = useState(0);
   const [starBump, setStarBump] = useState(false);
 
@@ -635,8 +637,29 @@ export default function Numbers1To10App({
       </header>
 
       {/* ============================================================ */}
-      {/* HOPSCOTCH MAT ADVENTURE GAME                                 */}
+      {/* ACTIVITY TABS NAVIGATION                                      */}
       {/* ============================================================ */}
+      <nav className="numbers-tab-nav" aria-label="Activity Mode Selection">
+        <button
+          type="button"
+          className={`numbers-tab-btn ${activeTab === 'hopscotch' ? 'active' : ''}`}
+          onClick={() => { sfxClick(); setActiveTab('hopscotch'); }}
+        >
+          <span>🐰</span> <span>Hopscotch Mat</span>
+        </button>
+        <button
+          type="button"
+          className={`numbers-tab-btn ${activeTab === 'maze' ? 'active' : ''}`}
+          onClick={() => { sfxClick(); setActiveTab('maze'); }}
+        >
+          <span>🚀</span> <span>Space Maze</span>
+        </button>
+      </nav>
+
+      {/* ============================================================ */}
+      {/* TAB 1: HOPSCOTCH MAT ADVENTURE GAME                          */}
+      {/* ============================================================ */}
+      {activeTab === 'hopscotch' && (
       <section className="numbers-card">
         {/* Compact Section Header */}
         <div className="numbers-section-header">
@@ -936,6 +959,18 @@ export default function Numbers1To10App({
 
         </div>
       </section>
+      )}
+
+      {/* ============================================================ */}
+      {/* TAB 2: SPACE MAZE ADVENTURE GAME                             */}
+      {/* ============================================================ */}
+      {activeTab === 'maze' && (
+        <SpaceMazeAdventure
+          onAwardStars={awardStars}
+          onTopicComplete={markTopicCompleted}
+          sfxTone={sfxTone}
+        />
+      )}
 
       {/* ============================================================ */}
       {/* MODAL: HOW TO PLAY TUTORIAL                                  */}
