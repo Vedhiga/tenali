@@ -397,35 +397,54 @@ export default function NumberTracingApp({
     }
   }, [selectedNum, playChime, finishCountingAndAdvance]);
 
-  // Phase A: App counts first (1, 2, ... N) aloud with chimes & sequential glow
+  // Phase A: App counts first: First say the number (e.g. 4), and then count 1, 2, 3, 4
   const startAppCountStage = useCallback(() => {
     setStage('APP_COUNT');
     stageRef.current = 'APP_COUNT';
-    setAppCountStep(1);
-    playChime(1);
-    speakNumber(1);
+    setAppCountStep(0);
 
-    let current = 1;
-    const scheduleNext = () => {
-      if (current < selectedNum) {
-        current++;
-        setAppCountStep(current);
-        playChime(current);
-        speakNumber(current);
-        const t = setTimeout(scheduleNext, 750);
-        demoTimersRef.current.push(t);
+    // Step 0: First say the target number (e.g. "Four")
+    speakNumber(selectedNum);
+    playTone(440, 'triangle', 0.25, 0.2);
+
+    // Then start counting 1, 2, ... N after a clear pause
+    const tStartCount = setTimeout(() => {
+      let current = 1;
+      setAppCountStep(1);
+      playChime(1);
+      speakNumber(1);
+
+      const scheduleNext = () => {
+        if (current < selectedNum) {
+          current++;
+          setAppCountStep(current);
+          playChime(current);
+          speakNumber(current);
+          const t = setTimeout(scheduleNext, 750);
+          demoTimersRef.current.push(t);
+        } else {
+          // App finished counting! Hand over to kid through mic
+          const t = setTimeout(() => {
+            startKidCountStage();
+          }, 850);
+          demoTimersRef.current.push(t);
+        }
+      };
+
+      if (selectedNum > 1) {
+        const tNext = setTimeout(scheduleNext, 750);
+        demoTimersRef.current.push(tNext);
       } else {
-        // App finished counting! Hand over to kid through mic
-        const t = setTimeout(() => {
+        // If selectedNum is 1, app has counted 1, now transition to kid
+        const tDone = setTimeout(() => {
           startKidCountStage();
         }, 850);
-        demoTimersRef.current.push(t);
+        demoTimersRef.current.push(tDone);
       }
-    };
+    }, 900);
 
-    const tFirst = setTimeout(scheduleNext, 750);
-    demoTimersRef.current.push(tFirst);
-  }, [selectedNum, playChime, speakNumber, startKidCountStage]);
+    demoTimersRef.current.push(tStartCount);
+  }, [selectedNum, playTone, playChime, speakNumber, startKidCountStage]);
 
   // User Pointer Dragging along Path
   const handlePointerDown = (e) => {
@@ -540,6 +559,7 @@ export default function NumberTracingApp({
     setKidCountStep(1);
     kidCountStepRef.current = 1;
     setHeardWord('');
+    speakNumber(n);
   };
 
   // Animated Playable Demo: Demonstrates how to trace and count
@@ -640,48 +660,56 @@ export default function NumberTracingApp({
 
     demoTimersRef.current.push(t1);
 
-    // Sub-routine: Count objects demo (Hand points as number is spoken)
+    // Sub-routine: Count objects demo: First say the number (e.g. 4), and then count 1, 2, 3, 4
     const startCountingDemo = () => {
       const tCountStart = setTimeout(() => {
         setStage('APP_COUNT');
         stageRef.current = 'APP_COUNT';
         setAppCountStep(0);
 
-        let c = 1;
-        const totalItems = selectedNum;
+        // Step 0: First say the target number itself
+        speakNumber(selectedNum);
+        playTone(440, 'triangle', 0.25, 0.2);
 
-        const countNextItem = () => {
-          if (c <= totalItems) {
-            setDemoHandPos({ target: 'item', x: 0, y: 0, pressing: true, itemIdx: c });
-            setAppCountStep(c);
-            playChime(c);
-            speakNumber(c);
+        const tBeginCount = setTimeout(() => {
+          let c = 1;
+          const totalItems = selectedNum;
 
-            const tItemRelease = setTimeout(() => {
-              setDemoHandPos(prev => ({ ...prev, pressing: false }));
-              c++;
-              const tNextDelay = setTimeout(countNextItem, 400);
-              demoTimersRef.current.push(tNextDelay);
-            }, 350);
+          const countNextItem = () => {
+            if (c <= totalItems) {
+              setDemoHandPos({ target: 'item', x: 0, y: 0, pressing: true, itemIdx: c });
+              setAppCountStep(c);
+              playChime(c);
+              speakNumber(c);
 
-            demoTimersRef.current.push(tItemRelease);
-          } else {
-            // Demo finished! Reset to interactive play mode
-            const tFinish = setTimeout(() => {
-              stopDemo();
-              setStage('TRACING');
-              stageRef.current = 'TRACING';
-              setCurrentStrokeIdx(0);
-              setStrokeProgress(0);
-              setCompletedStrokes([]);
-              setAppCountStep(0);
-              setKidCountStep(1);
-            }, 800);
-            demoTimersRef.current.push(tFinish);
-          }
-        };
+              const tItemRelease = setTimeout(() => {
+                setDemoHandPos(prev => ({ ...prev, pressing: false }));
+                c++;
+                const tNextDelay = setTimeout(countNextItem, 400);
+                demoTimersRef.current.push(tNextDelay);
+              }, 350);
 
-        countNextItem();
+              demoTimersRef.current.push(tItemRelease);
+            } else {
+              // Demo finished! Reset to interactive play mode
+              const tFinish = setTimeout(() => {
+                stopDemo();
+                setStage('TRACING');
+                stageRef.current = 'TRACING';
+                setCurrentStrokeIdx(0);
+                setStrokeProgress(0);
+                setCompletedStrokes([]);
+                setAppCountStep(0);
+                setKidCountStep(1);
+              }, 800);
+              demoTimersRef.current.push(tFinish);
+            }
+          };
+
+          countNextItem();
+        }, 900);
+
+        demoTimersRef.current.push(tBeginCount);
       }, 500);
 
       demoTimersRef.current.push(tCountStart);
@@ -738,12 +766,14 @@ export default function NumberTracingApp({
         {/* Left Column: Hollow Cartoon Numeral & Guided Tracing Track */}
         <div className="trace-canvas-panel">
           <div className="trace-panel-header">
-            <span className="number-name-badge">Number {selectedNum}</span>
+            <span className={`number-name-badge ${stage === 'APP_COUNT' && appCountStep === 0 ? 'is-speaking' : ''}`}>
+              Number {selectedNum}
+            </span>
             <span className="stroke-progress-indicator">
               {stage === 'TRACING'
                 ? `Stroke ${currentStrokeIdx + 1} of ${config.strokes.length}`
                 : stage === 'APP_COUNT'
-                ? '🔊 Listen & Watch'
+                ? (appCountStep === 0 ? `🔊 Number ${selectedNum}` : '🔊 Listen & Watch')
                 : stage === 'KID_COUNT'
                 ? '🎤 Your Turn to Count!'
                 : '✓ Great Job!'}
@@ -908,7 +938,11 @@ export default function NumberTracingApp({
             {stage === 'APP_COUNT' && (
               <div className="voice-mic-indicator app-count-mode">
                 <span className="voice-mic-dot active" />
-                <span>🔊 Counting {appCountStep} / {selectedNum}</span>
+                <span>
+                  {appCountStep === 0
+                    ? `🔊 Number ${selectedNum}`
+                    : `🔊 Counting ${appCountStep} / ${selectedNum}`}
+                </span>
               </div>
             )}
             {stage === 'KID_COUNT' && (
