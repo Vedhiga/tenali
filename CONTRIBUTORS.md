@@ -56,7 +56,7 @@
 ## 🥇 Leaderboard
 
 <!-- live-rank:start -->
-_Live data — last regenerated 2026-11-01 · auto-refreshed by [`github-actions[bot]`](https://github.com/features/actions) on every push to `main` and every 12h._
+_Live data — last regenerated 2026-11-08 · auto-refreshed by [`github-actions[bot]`](https://github.com/features/actions) on every push to `main` and every 12h._
 
 | # | 👤 Real Name | 🔗 GitHub ID | 📝 Commits | 🔀 PRs | 🏷️ Role |
 |--:|:-------------|:-------------|----------:|-----:|:--------|
@@ -927,7 +927,7 @@ _Live data — last regenerated 2026-11-01 · auto-refreshed by [`github-actions
         <br/><b>Ayush Mishra</b>
         <br/><a href="https://github.com/codefixxx">@codefixxx</a>
         <br/><sub>🏆 4 commits · 2 PRs merged</sub>
-        <br/><sub>📍 Delhi</sub>
+        <br/><sub>📍 Delhi · 🌐 https://portfolio-ayush-mishra.vercel.app/</sub>
       </td>
       <td valign="top" width="*">
         <h4>34. New Contributor</h4>
