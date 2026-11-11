@@ -1,0 +1,21 @@
+[Unit]
+Description=Tenali Whisper Indian Digits Voice Recognition Daemon
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/var/www/tenali/whisper_server
+Environment="PATH=/var/www/tenali/whisper_server/venv/bin:/usr/local/bin:/usr/bin"
+Environment="HOST=127.0.0.1"
+Environment="PORT=8000"
+ExecStart=/var/www/tenali/whisper_server/venv/bin/python server.py
+Restart=always
+RestartSec=3
+
+# Resource safeguards
+MemoryMax=512M
+CPUQuota=100%
+
+[Install]
+WantedBy=multi-user.target

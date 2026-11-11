@@ -3,6 +3,42 @@ import { AudioChunkRecorder } from './audioChunkRecorder.js';
 import { resolveTextToNumber } from './phoneticResolver.js';
 
 /**
+ * Encode Float32Array PCM samples into a standard 16-bit 16kHz mono WAV Blob
+ * for sending to the local Whisper voice recognition server.
+ */
+function encodeWAV(samples, sampleRate = 16000) {
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+
+  const writeString = (offset, string) => {
+    for (let i = 0; i < string.length; i++) {
+      view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeString(8, 'WAVE');
+  view.setUint32(16, 16, true); // PCM Chunk size
+  view.setUint16(20, 1, true);  // AudioFormat (1 = PCM)
+  view.setUint16(22, 1, true);  // Channels (1 = Mono)
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * 2, true); // ByteRate
+  view.setUint16(32, 2, true);  // BlockAlign
+  view.setUint16(34, 16, true); // BitsPerSample
+  writeString(36, 'data');
+  view.setUint32(40, samples.length * 2, true);
+
+  let offset = 44;
+  for (let i = 0; i < samples.length; i++, offset += 2) {
+    let s = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+  }
+
+  return new Blob([buffer], { type: 'audio/wav' });
+}
+
+/**
  * useWhisperVoice
  *
  * Click-to-Speak & Real-Time Neural Speech hook for NumberTracingApp & SpaceMazeAdventure.
@@ -28,7 +64,7 @@ export function useWhisperVoice({
   const [heardText, setHeardText] = useState('');
   const [lastDetectedNumber, setLastDetectedNumber] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
-  const [serverOnline, setServerOnline] = useState(true);
+  const [serverOnline, setServerOnline] = useState(false);
 
   const recorderRef = useRef(null);
   const speechRecognitionRef = useRef(null);
@@ -39,6 +75,7 @@ export function useWhisperVoice({
   const onNumberDetectedRef = useRef(onNumberDetected);
   const onTextHeardRef = useRef(onTextHeard);
   const isRecordingRef = useRef(false);
+  const serverOnlineRef = useRef(false);
   const autoStopTimerRef = useRef(null);
   const nativeStopTimerRef = useRef(null);
   const stopRecordingRef = useRef(null);
@@ -57,6 +94,37 @@ export function useWhisperVoice({
   useEffect(() => {
     isRecordingRef.current = isRecording;
   }, [isRecording]);
+
+  // Auto-detect local/backend Whisper voice recognition server at http://127.0.0.1:8000
+  useEffect(() => {
+    let isMounted = true;
+    const probeServer = async () => {
+      try {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), 1200);
+        let res = null;
+        try {
+          res = await fetch('http://127.0.0.1:8000/api/health', { signal: controller.signal });
+        } catch {
+          try {
+            res = await fetch('/api/health', { signal: controller.signal });
+          } catch {}
+        }
+        clearTimeout(tid);
+        if (isMounted && res && res.ok) {
+          const data = await res.json();
+          if (data.service === 'tenali-whisper-voice' || data.model_loaded !== undefined) {
+            console.info('[useWhisperVoice] Connected to local Whisper AI server at http://127.0.0.1:8000');
+            setServerOnline(true);
+            serverOnlineRef.current = true;
+          }
+        }
+      } catch (e) {
+        // Server offline; in-browser WASM worker will handle inference seamlessly
+      }
+    };
+    probeServer();
+  }, []);
 
   // Initialize Web Worker for in-browser ONNX inference
   useEffect(() => {
@@ -186,8 +254,53 @@ export function useWhisperVoice({
       let recognizedRaw = '';
       let detectedNumber = null;
 
-      // 1. In-Browser Web Worker (ONNX Runtime Web / Transformers.js)
-      if (audioChunk && audioChunk.length >= 800 && workerRef.current) {
+      // 1. Try Local Whisper Voice Recognition Server (<100ms latency)
+      if (serverOnlineRef.current && audioChunk && audioChunk.length >= 800) {
+        try {
+          const wavBlob = encodeWAV(audioChunk, 16000);
+          const formData = new FormData();
+          formData.append('file', wavBlob, 'recording.wav');
+
+          const controller = new AbortController();
+          const tid = setTimeout(() => controller.abort(), 2500);
+
+          let srvRes = null;
+          try {
+            srvRes = await fetch('http://127.0.0.1:8000/api/recognize', {
+              method: 'POST',
+              body: formData,
+              signal: controller.signal
+            });
+          } catch {
+            try {
+              srvRes = await fetch('/api/recognize', {
+                method: 'POST',
+                body: formData,
+                signal: controller.signal
+              });
+            } catch {}
+          }
+          clearTimeout(tid);
+
+          if (srvRes && srvRes.ok) {
+            const srvData = await srvRes.json();
+            if (srvData.status === 'success') {
+              recognizedRaw = srvData.raw || srvData.text || '';
+              if (srvData.digit && srvData.digit >= 1 && srvData.digit <= 10) {
+                detectedNumber = srvData.digit;
+              } else if (recognizedRaw) {
+                detectedNumber = resolveTextToNumber(recognizedRaw);
+              }
+              console.info(`[useWhisperVoice] Server recognized: "${recognizedRaw}" -> ${detectedNumber} (${srvData.latency_ms}ms)`);
+            }
+          }
+        } catch (srvErr) {
+          console.info('[useWhisperVoice] Server inference failed, falling back to in-browser WASM worker:', srvErr?.message || srvErr);
+        }
+      }
+
+      // 2. In-Browser Web Worker (ONNX Runtime Web / Transformers.js Fallback)
+      if (!detectedNumber && audioChunk && audioChunk.length >= 800 && workerRef.current) {
         try {
           const workerPromise = new Promise((resolve, reject) => {
             workerResolverRef.current = { resolve, reject };

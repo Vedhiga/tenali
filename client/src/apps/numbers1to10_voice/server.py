@@ -73,15 +73,25 @@ def resolve_digit(text: str):
             return num
     return None
 
+def find_model_path() -> str:
+    env_path = os.getenv("WHISPER_MODEL_PATH") or os.getenv("MODEL_PATH")
+    if env_path and os.path.exists(env_path):
+        return env_path
+    cache_pattern = os.path.expanduser("~/.cache/huggingface/hub/models--gradient-queen--whisper-tiny-indian-digits-final/snapshots/*")
+    snapshots = glob.glob(cache_pattern)
+    if snapshots and os.path.isdir(snapshots[0]):
+        return snapshots[0]
+    return "gradient-queen/whisper-tiny-indian-digits-final"
+
 def get_model():
     global _processor, _model
     if _processor is None or _model is None:
         from transformers import WhisperProcessor, WhisperForConditionalGeneration
 
-        model_snapshot = r"C:\Users\Vedhiga V.B\.cache\huggingface\hub\models--gradient-queen--whisper-tiny-indian-digits-final\snapshots\ea3844ae42b83b864b0528ecb0017bcb98ed35fb"
-        print(f"[server] Loading fine-tuned Whisper-Tiny from local cache...")
-        _processor = WhisperProcessor.from_pretrained(model_snapshot, local_files_only=True)
-        _model = WhisperForConditionalGeneration.from_pretrained(model_snapshot, local_files_only=True)
+        model_snapshot = find_model_path()
+        print(f"[server] Loading fine-tuned Whisper-Tiny from {model_snapshot}...")
+        _processor = WhisperProcessor.from_pretrained(model_snapshot)
+        _model = WhisperForConditionalGeneration.from_pretrained(model_snapshot)
         _model.eval()
         print("[server] Whisper-Tiny successfully loaded in memory!")
     return _processor, _model
